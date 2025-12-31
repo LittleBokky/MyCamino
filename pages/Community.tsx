@@ -127,7 +127,7 @@ const Community = ({
           id: p.id,
           name: p.full_name || p.username || 'Peregrino',
           username: p.username || '@peregrino',
-          avatar: p.avatar_url || `https://i.pravatar.cc/150?u=${p.id}`,
+          avatar: p.avatar_url,
           way: p.way || 'Camino por definir',
           stage: p.country ? `Desde ${p.country}` : 'En ruta',
           nationality: p.country === 'ES' ? '🇪🇸' : p.country === 'PT' ? '🇵🇹' : p.country === 'FR' ? '🇫🇷' : p.country === 'IT' ? '🇮🇹' : p.country === 'DE' ? '🇩🇪' : p.country === 'GB' ? '🇬🇧' : p.country === 'US' ? '🇺🇸' : '🏳️',
@@ -411,11 +411,17 @@ const Community = ({
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="relative cursor-pointer" onClick={() => onNavigate('Credential', pilgrim.id)}>
-                    <img
-                      src={pilgrim.avatar}
-                      alt={pilgrim.name}
-                      className="size-16 rounded-2xl object-cover ring-2 ring-slate-50 dark:ring-slate-700 group-hover:scale-105 transition-transform"
-                    />
+                    {pilgrim.avatar ? (
+                      <img
+                        src={pilgrim.avatar}
+                        alt={pilgrim.name}
+                        className="size-16 rounded-2xl object-cover ring-2 ring-slate-50 dark:ring-slate-700 group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="size-16 rounded-2xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-xl font-black ring-2 ring-slate-50 dark:ring-slate-700 group-hover:scale-105 transition-transform">
+                        {pilgrim.name[0]}
+                      </div>
+                    )}
                     <div className={`absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-white dark:border-surface-dark ${pilgrim.status === 'walking' ? 'bg-orange-500' :
                       pilgrim.status === 'resting' ? 'bg-blue-500' : 'bg-primary'
                       }`} />

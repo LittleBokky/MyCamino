@@ -364,17 +364,23 @@ const Credential = ({
                                                         setShowDropdown(false);
                                                     }}
                                                 >
-                                                    <img
-                                                        src={res.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.full_name || 'P')}&background=random`}
-                                                        className="size-10 rounded-xl object-cover"
-                                                        alt=""
-                                                    />
+                                                    {res.avatar_url ? (
+                                                        <img
+                                                            src={res.avatar_url}
+                                                            className="size-10 rounded-xl object-cover"
+                                                            alt=""
+                                                        />
+                                                    ) : (
+                                                        <div className="size-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold">
+                                                            {(res.full_name || 'P')[0]}
+                                                        </div>
+                                                    )}
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-bold truncate text-slate-900 dark:text-white group-hover:text-primary transition-colors">
                                                             {res.full_name || 'Peregrino'}
                                                         </p>
                                                         <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                                            @{res.username || 'peregrino'}
+                                                            {res.username?.startsWith('@') ? res.username : `@${res.username || 'peregrino'}`}
                                                         </p>
                                                     </div>
                                                     <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors text-lg">chevron_right</span>
