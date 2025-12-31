@@ -200,6 +200,16 @@ export const translations = {
         zh: '通知',
         ja: '通知',
     },
+    messages: {
+        en: 'Chat',
+        es: 'Chat',
+        pt: 'Bate-papo',
+        fr: 'Discussion',
+        de: 'Chat',
+        it: 'Chat',
+        zh: '聊天',
+        ja: 'チャット',
+    },
     noNotifications: {
         en: 'No new notifications',
         es: 'No hay notificaciones',

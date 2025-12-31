@@ -138,6 +138,8 @@ const LandingPage = ({
     seeAllResults: trans('seeAllResults', language),
     noNotifications: trans('noNotifications', language),
     startedFollowing: trans('startedFollowing', language),
+    chat: trans('messages', language),
+    sentMessage: language === 'en' ? 'sent you a message' : 'te envió un mensaje',
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -253,6 +255,11 @@ const LandingPage = ({
               <button onClick={() => onNavigate('Landing')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.home}</button>
               <button onClick={() => onNavigate('Planner')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.map}</button>
               <button onClick={() => onNavigate('Community')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.community}</button>
+              {user && (
+                <button onClick={() => onNavigate('Chat')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors flex items-center gap-1">
+                  {t.chat}
+                </button>
+              )}
               <button onClick={() => onNavigate('Contact')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{language === 'en' ? 'Contact' : 'Contacto'}</button>
             </nav>
 
@@ -395,7 +402,14 @@ const LandingPage = ({
                         <div className="max-h-96 overflow-y-auto">
                           {notifications.length > 0 ? (
                             notifications.map((n) => (
-                              <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => { onNavigate('Credential', n.actor_id); setShowNotifications(false); }}>
+                              <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => {
+                                if (n.type === 'message') {
+                                  onNavigate('Chat', n.actor_id);
+                                } else {
+                                  onNavigate('Credential', n.actor_id);
+                                }
+                                setShowNotifications(false);
+                              }}>
                                 <img
                                   src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
                                   className="size-10 rounded-xl object-cover"
@@ -403,7 +417,7 @@ const LandingPage = ({
                                 />
                                 <div className="flex-1">
                                   <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
-                                    <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {language === 'en' ? 'started following you' : 'empezó a seguirte'}
+                                    <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {n.type === 'message' ? t.sentMessage : t.startedFollowing}
                                   </p>
                                   <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
                                 </div>
@@ -456,23 +470,82 @@ const LandingPage = ({
           </div>
           <div className="lg:hidden flex items-center gap-3">
             {user && (
-              <button
-                onClick={() => onNavigate('Credential')}
-                className="flex items-center group"
-                title={t.dashboardGo}
-              >
-                {user?.user_metadata?.avatar_url ? (
-                  <img
-                    src={user.user_metadata.avatar_url}
-                    alt="Profile"
-                    className="size-9 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all"
-                  />
-                ) : (
-                  <div className="size-9 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all">
-                    {(user?.user_metadata?.full_name || user?.email || 'U')[0].toUpperCase()}
-                  </div>
-                )}
-              </button>
+              <>
+                <button
+                  onClick={() => onNavigate('Credential')}
+                  className="flex items-center group"
+                  title={t.dashboardGo}
+                >
+                  {user?.user_metadata?.avatar_url ? (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="Profile"
+                      className="size-9 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all"
+                    />
+                  ) : (
+                    <div className="size-9 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all">
+                      {(user?.user_metadata?.full_name || user?.email || 'U')[0].toUpperCase()}
+                    </div>
+                  )}
+                </button>
+
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowNotifications(!showNotifications);
+                      if (!showNotifications) markAllAsRead();
+                    }}
+                    className="relative p-2 text-slate-400 hover:text-primary transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-2xl">notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 size-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-background-dark">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {showNotifications && (
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in text-left z-50">
+                      <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                        <h4 className="font-black text-xs uppercase tracking-widest text-slate-400">
+                          {t.notifs}
+                        </h4>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto">
+                        {notifications.length > 0 ? (
+                          notifications.map((n) => (
+                            <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => {
+                              if (n.type === 'message') {
+                                onNavigate('Chat', n.actor_id);
+                              } else {
+                                onNavigate('Credential', n.actor_id);
+                              }
+                              setShowNotifications(false);
+                            }}>
+                              <img
+                                src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
+                                className="size-10 rounded-xl object-cover"
+                                alt=""
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
+                                  <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {n.type === 'message' ? t.sentMessage : t.startedFollowing}
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-12 text-center text-slate-400 italic text-sm">
+                            {t.noNotifications}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
             <button
               className="text-[#0e1b14] dark:text-white p-1"
@@ -604,6 +677,9 @@ const LandingPage = ({
             <button onClick={() => { onNavigate('Landing'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.home}</button>
             <button onClick={() => { onNavigate('Planner'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.map}</button>
             <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.community}</button>
+            {user && (
+              <button onClick={() => { onNavigate('Chat'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.chat}</button>
+            )}
             <button onClick={() => { onNavigate('Contact'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{language === 'en' ? 'Contact' : 'Contacto'}</button>
             <div className="h-px bg-gray-100 dark:bg-gray-800 my-1"></div>
             {user ? (

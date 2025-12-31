@@ -10,10 +10,11 @@ import Workshop from './pages/Workshop';
 import Community from './pages/Community';
 import Packs from './pages/Packs';
 import Contact from './pages/Contact';
+import Chat from './pages/Chat';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
-export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community' | 'Packs' | 'Contact' | 'Pro Dashboard' | 'Biz Profile' | 'Workshop' | 'Stage Details';
+export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community' | 'Packs' | 'Contact' | 'Pro Dashboard' | 'Biz Profile' | 'Workshop' | 'Stage Details' | 'Chat';
 export type Language = 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
 export type AuthMode = 'login' | 'register';
 
@@ -191,6 +192,7 @@ export default function App() {
       case 'Community': return <Community {...pageProps} />;
       case 'Packs': return <Packs {...pageProps} />;
       case 'Contact': return <Contact {...pageProps} />;
+      case 'Chat': return <Chat {...pageProps} selectedUserId={selectedProfileId} />;
       case 'Pro Dashboard': return <ProfessionalDashboard {...pageProps} />;
       case 'Biz Profile': return <BusinessProfile {...pageProps} />;
       case 'Workshop': return <Workshop {...pageProps} />;
