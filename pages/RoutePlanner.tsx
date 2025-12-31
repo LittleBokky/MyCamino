@@ -264,10 +264,10 @@ const RoutePlanner = ({
 
   const fetchRoute = async (start: L.LatLng, end: L.LatLng) => {
     setLoading(true);
-    // OSRM walking profile
-    // Note: OSRM Public Demo Server sometimes fails on very long routes (like 800km).
-    // In a production app, we should use a custom OSRM instance or split the route.
-    const url = `https://router.project-osrm.org/route/v1/walking/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+
+    // Using FOSSGIS OSRM server (routing.openstreetmap.de)
+    // This server is specifically configured for better pedestrian routing.
+    const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
 
     try {
       const response = await fetch(url);
@@ -275,7 +275,7 @@ const RoutePlanner = ({
 
       if (data.routes && data.routes.length > 0) {
         const route = data.routes[0];
-        // geometry.coordinates is [lon, lat], leaflet needs [lat, lon]
+        // OSRM returns [lon, lat], leaflet needs [lat, lon]
         const coordinates = route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]);
         setRoutePath(coordinates);
 
@@ -285,7 +285,6 @@ const RoutePlanner = ({
         setDistance(`${distKm} km`);
 
         // Force manual calculation for Walking (approx 4.5 km/h)
-        // API duration is proving unreliable (sometimes returning driving times)
         const walkingSpeedKmH = 4.5;
         const totalHours = distKmRaw / walkingSpeedKmH;
 
@@ -298,7 +297,7 @@ const RoutePlanner = ({
 
         setDuration(timeString);
       } else {
-        alert('Route not found or too long for the demo server. Try shorter segments.');
+        alert('Route not found. Try points closer to known paths.');
       }
     } catch (error) {
       console.error("Error fetching route:", error);

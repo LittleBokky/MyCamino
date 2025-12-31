@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { supabase } from '../lib/supabase';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -29,24 +29,45 @@ const MapUpdater = ({ start, end }: { start: [number, number], end: [number, num
     return null;
 };
 
-// Mini Map Component for Cards
-const RouteMapCard = ({ route, onClick, onDelete, isOwnProfile }: { route: any, onClick: () => void, onDelete: () => void, isOwnProfile: boolean }) => {
+// Mini Map Component for Cards (Memoized for performance)
+const RouteMapCard = memo(({ route, onClick, onDelete, isOwnProfile }: { route: any, onClick: () => void, onDelete: () => void, isOwnProfile: boolean }) => {
     const start = useMemo(() => [route.start_lat, route.start_lng] as [number, number], [route]);
     const end = useMemo(() => [route.end_lat, route.end_lng] as [number, number], [route]);
 
-    // State for the actual curved path and live details
+    // Lazy loading states
+    const [isVisible, setIsVisible] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false);
     const [routePath, setRoutePath] = useState<[number, number][]>([]);
     const [liveDuration, setLiveDuration] = useState<string | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Intersection Observer to detect when card is on screen
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setIsVisible(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: '200px' } // Start loading safely before it enters view
+        );
+
+        if (containerRef.current) observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
+        if (!isVisible) return;
+
         let isMounted = true;
         const fetchRouteGeometry = async () => {
             if (!route.start_lat || !route.end_lat) return;
 
             try {
-                // Fetch walking route from OSRM
+                // Using FOSSGIS OSRM server (routing.openstreetmap.de)
                 const response = await fetch(
-                    `https://router.project-osrm.org/route/v1/walking/${route.start_lng},${route.start_lat};${route.end_lng},${route.end_lat}?overview=full&geometries=geojson`
+                    `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${route.start_lng},${route.start_lat};${route.end_lng},${route.end_lat}?overview=full&geometries=geojson`
                 );
                 const data = await response.json();
 
@@ -57,7 +78,6 @@ const RouteMapCard = ({ route, onClick, onDelete, isOwnProfile }: { route: any, 
                     setRoutePath(coordinates);
 
                     // Calculate live duration for walking MANUALLY
-                    // Speed: 4.5 km/h
                     const distKm = r.distance / 1000;
                     const totalHours = distKm / 4.5;
                     const hours = Math.floor(totalHours);
@@ -70,58 +90,69 @@ const RouteMapCard = ({ route, onClick, onDelete, isOwnProfile }: { route: any, 
                 }
             } catch (error) {
                 console.error("Error fetching card route preview:", error);
+            } finally {
+                if (isMounted) setIsLoaded(true);
             }
         };
 
         fetchRouteGeometry();
 
         return () => { isMounted = false; };
-    }, [route.start_lat, route.start_lng, route.end_lat, route.end_lng]);
+    }, [isVisible, route.start_lat, route.start_lng, route.end_lat, route.end_lng]);
 
     return (
         <div
-            className="group relative bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden aspect-square cursor-pointer hover:shadow-lg transition-all"
+            ref={containerRef}
+            className="group relative bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden aspect-square cursor-pointer hover:shadow-lg transition-all"
             onClick={onClick}
         >
-            {/* Map Preview */}
+            {/* Map Preview (Only render maps when visible to save memory/battery) */}
             <div className="absolute inset-0 z-0">
-                <MapContainer
-                    center={start}
-                    zoom={13}
-                    zoomControl={false}
-                    scrollWheelZoom={false}
-                    dragging={false}
-                    touchZoom={false}
-                    doubleClickZoom={false}
-                    attributionControl={false}
-                    className="w-full h-full"
-                    style={{ background: '#f0f0f0' }}
-                >
-                    <TileLayer
-                        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    />
-                    <MapUpdater start={start} end={end} />
-                    <Marker position={start} icon={icon} />
-                    <Marker position={end} icon={icon} />
-                    {/* Render curved path if available, otherwise straight line */}
-                    <Polyline
-                        positions={routePath.length > 0 ? routePath : [start, end]}
-                        color="#16a34a"
-                        weight={4}
-                        opacity={0.8}
-                    />
-                </MapContainer>
+                {!isVisible || !isLoaded ? (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-50 dark:bg-slate-800/20">
+                        <div className="flex flex-col items-center gap-2 text-slate-400">
+                            <span className="material-symbols-outlined animate-pulse text-2xl">map</span>
+                            <span className="text-[10px] uppercase font-bold tracking-widest opacity-40">Cargando...</span>
+                        </div>
+                    </div>
+                ) : (
+                    <MapContainer
+                        center={start}
+                        zoom={13}
+                        zoomControl={false}
+                        scrollWheelZoom={false}
+                        dragging={false}
+                        touchZoom={false}
+                        doubleClickZoom={false}
+                        attributionControl={false}
+                        className="w-full h-full animate-in fade-in duration-500"
+                        style={{ background: '#f0f0f0' }}
+                    >
+                        <TileLayer
+                            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                        />
+                        <MapUpdater start={start} end={end} />
+                        <Marker position={start} icon={icon} />
+                        <Marker position={end} icon={icon} />
+                        <Polyline
+                            positions={routePath.length > 0 ? routePath : [start, end]}
+                            color="#16a34a"
+                            weight={3}
+                            opacity={0.8}
+                        />
+                    </MapContainer>
+                )}
             </div>
 
             {/* Overlay Gradient */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity z-10" />
 
             {/* Content */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 text-white z-20">
-                <h4 className="font-bold text-lg leading-tight mb-1 truncate shadow-sm">{route.name}</h4>
-                <div className="flex items-center gap-3 text-xs font-medium text-white/90">
-                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">straighten</span> {route.distance_km}</span>
-                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">schedule</span> {liveDuration || route.duration_text}</span>
+            <div className="absolute bottom-0 left-0 right-0 p-2 text-white z-20">
+                <h4 className="font-bold text-xs md:text-sm leading-tight mb-0.5 truncate shadow-sm">{route.name}</h4>
+                <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-semibold text-white/90">
+                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] md:text-[14px]">straighten</span> {route.distance_km}</span>
+                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] md:text-[14px]">schedule</span> {liveDuration || route.duration_text}</span>
                 </div>
             </div>
 
@@ -132,15 +163,15 @@ const RouteMapCard = ({ route, onClick, onDelete, isOwnProfile }: { route: any, 
                         e.stopPropagation();
                         onDelete();
                     }}
-                    className="absolute top-2 right-2 p-2 bg-white/10 hover:bg-red-500/80 backdrop-blur-md text-white rounded-full opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100 z-30"
+                    className="absolute top-1 right-1 p-1 bg-white/10 hover:bg-red-500/80 backdrop-blur-md text-white rounded-full lg:opacity-0 lg:group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100 z-30"
                     title="Delete Route"
                 >
-                    <span className="material-symbols-outlined text-[18px] flex">delete</span>
+                    <span className="material-symbols-outlined text-[16px] flex">delete</span>
                 </button>
             )}
         </div>
     );
-};
+});
 
 interface Props {
     // ... rest of file
