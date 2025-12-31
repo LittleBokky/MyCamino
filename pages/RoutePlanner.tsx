@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import { supabase } from '../lib/supabase';
 
 // Custom Marker Icon definition
 const icon = new L.Icon({
@@ -13,16 +14,164 @@ const icon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-// Route Data
-const STAGES = [
-  { name: "Saint-Jean-Pied-de-Port", coords: [43.1636, -1.2358], description: "Start of French Way" },
-  { name: "Roncesvalles", coords: [43.0094, -1.3194], description: "Historical Monastery" },
-  { name: "Zubiri", coords: [42.9309, -1.5039], description: "Bridge of Rabies" },
-  { name: "Pamplona", coords: [42.8125, -1.6458], description: "Capital of Navarre" },
-  { name: "Puente la Reina", coords: [42.6719, -1.8153], description: "Bridge of the Queen" }
-] as const;
+// Route Group Definition
+interface RouteGroup {
+  country: string;
+  routes: {
+    id: string;
+    name: string;
+    start: [number, number];
+    end: [number, number];
+    description: string;
+  }[];
+}
 
-const ROUTE_LINE = STAGES.map(s => [...s.coords]) as [number, number][];
+const FAMOUS_ROUTES_GROUPED: RouteGroup[] = [
+  {
+    country: "Spain",
+    routes: [
+      {
+        id: 'frances',
+        name: 'Camino Francés',
+        start: [43.1636, -1.2358], // St Jean Pied de Port (technically France, but start of main route)
+        end: [42.8782, -8.5448], // Santiago
+        description: 'The classic 800km route.'
+      },
+      {
+        id: 'norte',
+        name: 'Camino del Norte',
+        start: [43.3379, -1.7888], // Irun
+        end: [42.8782, -8.5448],
+        description: 'Coastal route from Basque Country.'
+      },
+      {
+        id: 'primitivo',
+        name: 'Camino Primitivo',
+        start: [43.3619, -5.8494], // Oviedo
+        end: [42.8782, -8.5448],
+        description: 'The first pilgrimage route.'
+      },
+      {
+        id: 'ingles_ferrol',
+        name: 'Camino Inglés (Ferrol)',
+        start: [43.4832, -8.2369], // Ferrol
+        end: [42.8782, -8.5448],
+        description: 'Standard 100km+ for Compostela.'
+      },
+      {
+        id: 'ingles_coruna',
+        name: 'Camino Inglés (A Coruña)',
+        start: [43.3623, -8.4115], // A Coruña
+        end: [42.8782, -8.5448],
+        description: 'For Celtic Camino (Link with Ireland/UK).'
+      },
+      {
+        id: 'via_plata',
+        name: 'Vía de la Plata',
+        start: [37.3891, -5.9845], // Sevilla
+        end: [42.8782, -8.5448], // Santiago
+        description: 'Long Roman road from the south.'
+      },
+      {
+        id: 'fisterra',
+        name: 'Camino de Fisterra',
+        start: [42.8782, -8.5448], // Santiago
+        end: [42.9068, -9.2633], // Fisterra
+        description: 'To the end of the world.'
+      }
+    ]
+  },
+  {
+    country: "Portugal",
+    routes: [
+      {
+        id: 'portugues_central',
+        name: 'Portugués Central',
+        start: [41.1579, -8.6291], // Porto
+        end: [42.8782, -8.5448],
+        description: 'Popular route from Porto.'
+      },
+      {
+        id: 'portugues_litoral',
+        name: 'Portugués Coastal',
+        start: [41.1579, -8.6291], // Porto (actually follows coast)
+        end: [42.8782, -8.5448],
+        description: 'Scenic coastal alternative.'
+      },
+      {
+        id: 'portugues_lisboa',
+        name: 'Portugués from Lisbon',
+        start: [38.7115, -9.1399], // Lisbon
+        end: [42.8782, -8.5448],
+        description: 'The full Portuguese way.'
+      }
+    ]
+  },
+  {
+    country: "France",
+    routes: [
+      {
+        id: 'podiensis',
+        name: 'Via Podiensis',
+        start: [45.0445, 3.8860], // Le Puy-en-Velay
+        end: [43.1636, -1.2358], // St Jean Pied de Port
+        description: 'From Le Puy-en-Velay.'
+      },
+      {
+        id: 'turonensis',
+        name: 'Via Turonensis',
+        start: [48.8566, 2.3522], // Paris (Saint-Jacques Tower)
+        end: [43.1636, -1.2358],
+        description: 'The Way of Tours (from Paris).'
+      }
+    ]
+  },
+  {
+    country: "Ireland (Celtic Camino)",
+    routes: [
+      {
+        id: 'kerry_camino',
+        name: 'Kerry Camino',
+        start: [52.2713, -9.7026], // Tralee
+        end: [52.1409, -10.2703], // Dingle
+        description: 'Official Celtic Camino. Finish in Spain (A Coruña).'
+      },
+      {
+        id: 'st_kevins',
+        name: 'St Kevin\'s Way',
+        start: [53.0936, -6.6067], // Hollywood
+        end: [53.0119, -6.3298], // Glendalough
+        description: 'Official Celtic Camino. Finish in Spain (A Coruña).'
+      },
+      {
+        id: 'boyne_valley',
+        name: 'Boyne Valley Camino',
+        start: [53.7145, -6.3506], // Drogheda
+        end: [53.7431, -6.5025], // Mellifont Abbey loops
+        description: 'Official 25km Celtic Camino.'
+      }
+    ]
+  },
+  {
+    country: "United Kingdom",
+    routes: [
+      {
+        id: 'st_michaels',
+        name: 'St Michael\'s Way',
+        start: [50.1982, -5.4607], // Lelant
+        end: [50.1171, -5.4778], // St Michael's Mount
+        description: 'Cornish Celtic Camino route.'
+      },
+      {
+        id: 'north_wales',
+        name: 'North Wales Pilgrim\'s Way',
+        start: [53.2800, -3.2200], // Holywell (approx)
+        end: [52.7900, -4.7500], // Bardsey Island
+        description: 'Historical connection to Santiago.'
+      }
+    ]
+  }
+];
 
 interface Props {
   onNavigate: (view: any, profileId?: string | null) => void;
@@ -36,13 +185,217 @@ interface Props {
   showNotifications: boolean;
   setShowNotifications: (show: boolean) => void;
   markAllAsRead: () => void;
+  selectedRouteId?: string | null;
 }
+
+// Map Click Component
+const MapEvents = ({ onMapClick }: { onMapClick: (e: L.LeafletMouseEvent) => void }) => {
+  useMapEvents({
+    click: (e) => onMapClick(e),
+  });
+  return null;
+};
 
 const RoutePlanner = ({
   onNavigate, user, notifications, unreadCount, showNotifications,
-  setShowNotifications, markAllAsRead, language
+  setShowNotifications, markAllAsRead, language, selectedRouteId
 }: Props) => {
   const [showListOnMobile, setShowListOnMobile] = useState(true);
+  const [startPoint, setStartPoint] = useState<L.LatLng | null>(null);
+  const [endPoint, setEndPoint] = useState<L.LatLng | null>(null);
+  const [routePath, setRoutePath] = useState<[number, number][]>([]);
+  const [distance, setDistance] = useState<string>('');
+  const [duration, setDuration] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+
+  // Effect to handle selectedRouteId (loading saved routes)
+  useEffect(() => {
+    if (!selectedRouteId) return;
+
+    const loadSavedRoute = async () => {
+      // 1. Check if it is a Famous Route ID
+      let famousRoute = null;
+      for (const group of FAMOUS_ROUTES_GROUPED) {
+        famousRoute = group.routes.find(r => r.id === selectedRouteId);
+        if (famousRoute) break;
+      }
+
+      if (famousRoute) {
+        setSelectedPreset(selectedRouteId);
+        const start = L.latLng(famousRoute.start[0], famousRoute.start[1]);
+        const end = L.latLng(famousRoute.end[0], famousRoute.end[1]);
+        setStartPoint(start);
+        setEndPoint(end);
+        fetchRoute(start, end);
+        return;
+      }
+
+      // 2. If not famous, fetch from DB assuming it's a custom route UUID
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('user_routes')
+        .select('*')
+        .eq('id', selectedRouteId)
+        .single();
+
+      if (data && !error) {
+        const start = L.latLng(data.start_lat, data.start_lng);
+        const end = L.latLng(data.end_lat, data.end_lng);
+        setStartPoint(start);
+        setEndPoint(end);
+
+        // If it was a famous route saved by ID
+        if (data.route_id && data.route_id !== 'custom') {
+          setSelectedPreset(data.route_id);
+        } else {
+          setSelectedPreset('');
+        }
+
+        // Ideally we fetch route again or store geometry. For now fetch again.
+        fetchRoute(start, end);
+      }
+      setLoading(false);
+    };
+
+    loadSavedRoute();
+  }, [selectedRouteId]);
+
+  const fetchRoute = async (start: L.LatLng, end: L.LatLng) => {
+    setLoading(true);
+    // OSRM walking profile
+    // Note: OSRM Public Demo Server sometimes fails on very long routes (like 800km).
+    // In a production app, we should use a custom OSRM instance or split the route.
+    const url = `https://router.project-osrm.org/route/v1/walking/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        // geometry.coordinates is [lon, lat], leaflet needs [lat, lon]
+        const coordinates = route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]);
+        setRoutePath(coordinates);
+
+        // Distance in meters to km
+        const distKmRaw = route.distance / 1000;
+        const distKm = distKmRaw.toFixed(2);
+        setDistance(`${distKm} km`);
+
+        // Force manual calculation for Walking (approx 4.5 km/h)
+        // API duration is proving unreliable (sometimes returning driving times)
+        const walkingSpeedKmH = 4.5;
+        const totalHours = distKmRaw / walkingSpeedKmH;
+
+        const hours = Math.floor(totalHours);
+        const minutes = Math.round((totalHours - hours) * 60);
+
+        let timeString = '';
+        if (hours > 0) timeString += `${hours}h `;
+        timeString += `${minutes}min`;
+
+        setDuration(timeString);
+      } else {
+        alert('Route not found or too long for the demo server. Try shorter segments.');
+      }
+    } catch (error) {
+      console.error("Error fetching route:", error);
+      alert("Error calculating route. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePresetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const routeId = e.target.value;
+    setSelectedPreset(routeId);
+
+    if (routeId) {
+      // Search in all groups
+      let route = null;
+      for (const group of FAMOUS_ROUTES_GROUPED) {
+        route = group.routes.find(r => r.id === routeId);
+        if (route) break;
+      }
+
+      if (route) {
+        const start = L.latLng(route.start[0], route.start[1]);
+        const end = L.latLng(route.end[0], route.end[1]);
+
+        setStartPoint(start);
+        setEndPoint(end);
+        fetchRoute(start, end);
+        // On mobile, maybe we want to close list? keeping it open for now
+      }
+    } else {
+      resetRoute();
+    }
+  };
+
+  const saveRoute = async () => {
+    if (!user) {
+      alert('Please sign in to save routes');
+      return;
+    }
+    if (!startPoint || !endPoint) return;
+
+    setSaving(true);
+    try {
+      const routeName = selectedPreset
+        ? FAMOUS_ROUTES_GROUPED.flatMap(g => g.routes).find(r => r.id === selectedPreset)?.name
+        : `Custom Route ${new Date().toLocaleDateString()}`;
+
+      const { error } = await supabase.from('user_routes').insert({
+        user_id: user.id,
+        name: routeName,
+        route_id: selectedPreset || 'custom',
+        start_lat: startPoint.lat,
+        start_lng: startPoint.lng,
+        end_lat: endPoint.lat,
+        end_lng: endPoint.lng,
+        distance_km: distance,
+        duration_text: duration
+      });
+
+      if (error) {
+        // Check if table exists error?
+        if (error.code === '42P01') { // undefined_table
+          alert("Error: 'user_routes' table not found. Please run the migration.");
+        } else {
+          throw error;
+        }
+      } else {
+        alert('Route saved to your profile!');
+      }
+    } catch (e: any) {
+      console.error('Error saving route:', e);
+      alert('Failed to save route: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMapClick = (e: L.LeafletMouseEvent) => {
+    if (!startPoint) {
+      setStartPoint(e.latlng);
+      setSelectedPreset(''); // User is customizing
+    } else if (!endPoint) {
+      setEndPoint(e.latlng);
+      fetchRoute(startPoint, e.latlng);
+      setSelectedPreset(''); // User is customizing
+    }
+  };
+
+  const resetRoute = () => {
+    setStartPoint(null);
+    setEndPoint(null);
+    setRoutePath([]);
+    setDistance('');
+    setDuration('');
+    setSelectedPreset('');
+  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-text-main dark:text-white font-display overflow-hidden flex flex-col h-screen relative">
@@ -56,11 +409,7 @@ const RoutePlanner = ({
           <h2 className="text-text-main dark:text-white text-xl font-bold leading-tight tracking-tight">MyCamino</h2>
         </div>
         <div className="flex items-center gap-8">
-          <nav className="hidden md:flex items-center gap-9">
-            <button onClick={() => onNavigate('Dashboard')} className="text-sm font-medium hover:text-primary transition-colors">Community</button>
-            <button onClick={() => onNavigate('Workshop')} className="text-sm font-medium hover:text-primary transition-colors">Shop</button>
-            <button onClick={() => onNavigate('Credential')} className="text-sm font-medium hover:text-primary transition-colors">Profile</button>
-          </nav>
+          {/* Nav removed as requested */}
           <div className="flex items-center gap-3">
             {user && (
               <div className="relative">
@@ -122,166 +471,154 @@ const RoutePlanner = ({
 
       <div className="flex flex-1 overflow-hidden relative">
         <aside
-          className={`w-full lg:w-[420px] xl:w-[480px] flex flex-col bg-white dark:bg-background-dark border-r border-border-light dark:border-border-dark z-30 shadow-xl lg:shadow-none h-full absolute lg:relative transform transition-transform duration-300 ease-in-out lg:translate-x-0 group/sidebar ${showListOnMobile ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`flex flex-col bg-white dark:bg-background-dark z-30 shadow-2xl lg:shadow-xl absolute lg:relative transform transition-transform duration-300 ease-in-out group/sidebar overflow-hidden lg:translate-x-0
+            /* Mobile: Floating Card */
+            w-[calc(100%-32px)] max-w-sm h-auto max-h-[85vh] top-4 left-4 rounded-2xl border border-border-light dark:border-border-dark
+            /* Desktop: Full Sidebar */
+            lg:w-[420px] xl:w-[480px] lg:h-full lg:rounded-none lg:border-0 lg:border-r lg:top-0 lg:left-0 lg:max-h-none
+            ${showListOnMobile ? 'translate-x-0' : '-translate-x-[200%]'}
+          `}
           id="sidebar"
         >
-          <div className="p-6 border-b border-border-light dark:border-border-dark flex-none bg-white dark:bg-background-dark">
+          <div className="p-6 border-b border-border-light dark:border-border-dark flex-none bg-white dark:bg-background-dark relative">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h1 className="text-2xl font-bold text-text-main dark:text-white mb-1">Create Your Camino</h1>
-                <p className="text-text-muted dark:text-gray-400 text-sm">Customize your pilgrimage route</p>
+                <h1 className="text-2xl font-bold text-text-main dark:text-white mb-1">Route Planner</h1>
+                <p className="text-text-muted dark:text-gray-400 text-sm">Design your own walking path</p>
               </div>
               <button
                 onClick={() => setShowListOnMobile(false)}
-                className="lg:hidden p-2 text-gray-500 hover:text-primary"
+                className="lg:hidden p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-800 rounded-full"
               >
-                <span className="material-symbols-outlined">map</span>
+                <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="relative mb-6">
-              <label className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2 block">Select Major Route</label>
-              <div className="relative">
-                <select className="w-full appearance-none bg-background-light dark:bg-gray-800 border border-border-light dark:border-border-dark rounded-xl px-4 py-3 pr-10 text-text-main dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow cursor-pointer">
-                  <option value="frances">Camino Francés</option>
-                  <option value="portugues">Camino Portugués</option>
-                  <option value="norte">Camino del Norte</option>
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
-                  <span className="material-symbols-outlined">expand_more</span>
+
+            <div className="bg-primary/5 dark:bg-primary/10 rounded-xl p-6 border border-primary/10 mb-6 max-h-[40vh] overflow-y-auto lg:max-h-none">
+              <h3 className="text-sm font-bold text-text-main dark:text-white mb-4">Instructions</h3>
+
+              <div className="mb-4">
+                <label className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2 block">Choose Famous Route</label>
+                <div className="relative">
+                  <select
+                    value={selectedPreset}
+                    onChange={handlePresetChange}
+                    className="w-full appearance-none bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark rounded-xl px-4 py-3 pr-10 text-text-main dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow cursor-pointer text-sm"
+                  >
+                    <option value="">Select a route...</option>
+                    {FAMOUS_ROUTES_GROUPED.map(group => (
+                      <optgroup key={group.country} label={group.country}>
+                        {group.routes.map(route => (
+                          <option key={route.id} value={route.id}>{route.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
+                    <span className="material-symbols-outlined">expand_more</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex justify-between bg-primary/5 dark:bg-primary/10 rounded-xl p-4 border border-primary/10">
-              <div className="text-center">
-                <p className="text-xs text-text-muted uppercase font-semibold">Total Distance</p>
-                <p className="text-lg font-bold text-text-main dark:text-white">780 km</p>
-              </div>
-              <div className="w-px bg-primary/20"></div>
-              <div className="text-center">
-                <p className="text-xs text-text-muted uppercase font-semibold">Est. Days</p>
-                <p className="text-lg font-bold text-text-main dark:text-white">32 Days</p>
-              </div>
-              <div className="w-px bg-primary/20"></div>
-              <div className="text-center">
-                <p className="text-xs text-text-muted uppercase font-semibold">Difficulty</p>
-                <p className="text-lg font-bold text-text-main dark:text-white">Medium</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-text-main dark:text-white">Show on Map</h3>
-                <button className="text-primary text-xs font-medium hover:underline">Reset</button>
+              <div className="flex items-center gap-3 my-4">
+                <div className="h-px bg-border-light dark:bg-border-dark flex-1"></div>
+                <span className="text-[10px] text-text-muted uppercase font-bold">OR CUSTOMIZE</span>
+                <div className="h-px bg-border-light dark:bg-border-dark flex-1"></div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-semibold shadow-sm transition-transform active:scale-95">
-                  <span className="material-symbols-outlined text-[16px]">bed</span> Albergues
-                </button>
-                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark text-text-main dark:text-gray-300 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  <span className="material-symbols-outlined text-[16px]">restaurant</span> Dining
-                </button>
-                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark text-text-main dark:text-gray-300 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  <span className="material-symbols-outlined text-[16px]">attractions</span> Sights
-                </button>
-              </div>
+
+              <ol className="list-decimal pl-4 space-y-2 text-sm text-text-muted">
+                <li className={!startPoint && !selectedPreset ? "font-bold text-primary" : ""}>Click on the map to set Start Point</li>
+                <li className={startPoint && !endPoint ? "font-bold text-primary" : ""}>Click again to set End Point</li>
+                <li>View estimated distance and duration</li>
+              </ol>
             </div>
 
-            <div className="flex flex-col gap-4 pb-20">
-              <h3 className="text-sm font-bold text-text-main dark:text-white">Route Stages</h3>
-              <div className="group relative bg-white dark:bg-gray-800 rounded-xl border-2 border-primary shadow-sm overflow-hidden transition-all hover:shadow-md cursor-pointer" onClick={() => onNavigate('Stage Details')}>
-                <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                <div className="p-4 pl-5">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Stage 1</span>
-                      <span className="text-xs text-orange-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[14px]">landscape</span> Difficult</span>
+            {(distance || loading) && (
+              <div className="flex flex-col gap-4 animate-scale-in">
+                <div className="flex justify-between bg-white dark:bg-gray-800 rounded-xl p-4 border border-border-light dark:border-border-dark shadow-sm">
+                  <div className="text-center flex-1">
+                    <p className="text-xs text-text-muted uppercase font-semibold">Values</p>
+                    <div className="flex items-center justify-center gap-2 mt-1">
+                      <span className="material-symbols-outlined text-primary">straighten</span>
+                      <p className="text-xl font-bold text-text-main dark:text-white">{loading ? '...' : distance}</p>
                     </div>
-                    <span className="material-symbols-outlined text-primary text-sm">check_circle</span>
                   </div>
-                  <h4 className="font-bold text-text-main dark:text-white leading-tight mb-1">Saint-Jean-Pied-de-Port to Roncesvalles</h4>
-                  <div className="flex items-center gap-3 text-xs text-text-muted dark:text-gray-400 mb-3">
-                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">straighten</span> 25.1 km</span>
-                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">trending_up</span> +1250m</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="group relative bg-white dark:bg-gray-800 rounded-xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden transition-all hover:border-primary/50 cursor-pointer" onClick={() => onNavigate('Stage Details')}>
-                <div className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Stage 2</span>
-                      <span className="text-xs text-primary font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[14px]">hiking</span> Moderate</span>
+                  <div className="w-px bg-border-light dark:bg-border-dark mx-2"></div>
+                  <div className="text-center flex-1">
+                    <p className="text-xs text-text-muted uppercase font-semibold">Estimation</p>
+                    <div className="flex items-center justify-center gap-2 mt-1">
+                      <span className="material-symbols-outlined text-primary">timer</span>
+                      <p className="text-xl font-bold text-text-main dark:text-white">{loading ? '...' : duration}</p>
                     </div>
-                    <button className="text-gray-300 hover:text-primary transition-colors"><span className="material-symbols-outlined">add_circle</span></button>
                   </div>
-                  <h4 className="font-bold text-text-main dark:text-white leading-tight mb-1">Roncesvalles to Zubiri</h4>
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          <div className="p-6 border-t border-border-light dark:border-border-dark bg-white dark:bg-background-dark flex-none sticky bottom-0">
-            <button className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/30 transition-all active:scale-[0.98]">
-              <span className="material-symbols-outlined">save</span> Save Itinerary
-            </button>
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={resetRoute}
+                className={`flex-1 py-3 px-4 rounded-xl font-bold bg-white dark:bg-gray-800 text-text-main dark:text-white border border-border-light dark:border-border-dark hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-2 ${!startPoint ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={!startPoint}
+              >
+                <span className="material-symbols-outlined">restart_alt</span>
+                Reset
+              </button>
+              <button
+                onClick={saveRoute}
+                disabled={!startPoint || !endPoint || saving}
+                className={`flex-[2] py-3 px-4 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${startPoint && endPoint ? 'bg-primary hover:bg-primary-dark shadow-lg shadow-primary/20' : 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'}`}
+              >
+                {saving ? (
+                  <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <span className="material-symbols-outlined">bookmark_add</span>
+                )}
+                {saving ? 'Saving...' : 'Save to Profile'}
+              </button>
+            </div>
           </div>
         </aside>
 
         <main className="flex-1 relative h-full bg-[#e5e7eb] w-full z-0">
-          <MapContainer center={[42.9, -1.5]} zoom={9} scrollWheelZoom={true} className="h-full w-full outline-none z-0" zoomControl={false}>
+          <MapContainer center={[42.8125, -1.6458]} zoom={8} scrollWheelZoom={true} className="h-full w-full outline-none z-0" zoomControl={false}>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <Polyline positions={ROUTE_LINE} color="#17cf73" weight={5} dashArray="10, 10" />
-            {STAGES.map((stage, i) => (
-              <Marker key={i} position={stage.coords as [number, number]} icon={icon}>
-                <Popup className="font-display">
-                  <div className="text-center">
-                    <h3 className="font-bold text-text-main">{stage.name}</h3>
-                    <p className="text-xs text-text-muted">{stage.description}</p>
-                  </div>
-                </Popup>
+            <MapEvents onMapClick={handleMapClick} />
+
+            {startPoint && (
+              <Marker position={startPoint} icon={icon}>
+                <Popup>Start Point</Popup>
               </Marker>
-            ))}
+            )}
+
+            {endPoint && (
+              <Marker position={endPoint} icon={icon}>
+                <Popup>End Point</Popup>
+              </Marker>
+            )}
+
+            {routePath.length > 0 && (
+              <Polyline positions={routePath} color="#17cf73" weight={5} />
+            )}
           </MapContainer>
 
           {/* Mobile Map Toggle */}
           {!showListOnMobile && (
             <button
               onClick={() => setShowListOnMobile(true)}
-              className="lg:hidden absolute bottom-6 right-6 z-[1000] flex items-center gap-2 bg-white dark:bg-gray-900 text-text-main dark:text-white px-4 py-3 rounded-full shadow-xl font-bold border border-gray-200 dark:border-gray-700"
+              className="lg:hidden absolute top-4 left-4 z-[1000] flex items-center justify-center size-12 bg-white dark:bg-gray-900 text-text-main dark:text-white rounded-2xl shadow-xl font-bold border border-gray-200 dark:border-gray-700"
             >
-              <span className="material-symbols-outlined">list</span> Show List
+              <span className="material-symbols-outlined">menu_open</span>
             </button>
           )}
 
-          <div className="absolute inset-0 pointer-events-none p-4 md:p-6 flex flex-col justify-between z-[400]">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-4 pointer-events-auto">
-              <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-lg flex items-center p-1">
-                <div className="pl-3 pr-2 text-text-muted"><span className="material-symbols-outlined">search</span></div>
-                <input className="w-full bg-transparent border-none focus:ring-0 text-sm text-text-main dark:text-white placeholder-text-muted h-10" placeholder="Search specific stage or town..." type="text" />
-              </div>
-              <div className="flex bg-white dark:bg-gray-900 rounded-lg shadow-lg p-1 gap-1">
-                <button className="px-3 py-1.5 rounded-md bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors">Standard</button>
-                <button className="px-3 py-1.5 rounded-md text-text-muted hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-medium transition-colors">Satellite</button>
-              </div>
-            </div>
-            <div className="absolute top-[35%] left-[50%] -translate-x-1/2 -translate-y-[120%] bg-white dark:bg-gray-800 p-4 rounded-xl shadow-xl w-64 z-[500] group pointer-events-auto cursor-pointer" onClick={() => onNavigate('Stage Details')}>
-              <div className="flex justify-between items-start mb-2">
-                <h5 className="font-bold text-text-main dark:text-white text-sm">Pamplona</h5>
-                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold uppercase">Stage 3 End</span>
-              </div>
-              <div className="h-24 w-full bg-gray-200 rounded-lg mb-2 bg-cover bg-center" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuD7AgROmEAKKOby4n2LsKH5Hx3QEqwgbwIsMe2Fs1nosb_hM2lzdi1ung--aQA-bZT_1WEvIHZejD7cz8MMQwaueSl1Y7vFkyftr3L0EFMMnKYoyGvw3tk5qhiUrgJEikbrd-GDhV8SNK6NTho02xEBY1rQNSAWS5IPswS9cjFOI28QHH90AwbZI7b5RtJOoqg456plTXp1kda8Qc1JlNR3PF0sFwKOHcSsSVeeTi7y2Hl2tvK7heLic_IrhYBq9jOX4y_U5gN9Sts")' }}></div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-text-muted">Historical Capital</span>
-                <button className="text-primary text-xs font-bold hover:underline">View Details</button>
-              </div>
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-white dark:border-t-gray-800"></div>
+          <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-1 gap-1 flex">
+              <button className="px-3 py-1.5 rounded-md bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors">Standard</button>
+              <button className="px-3 py-1.5 rounded-md text-text-muted hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-medium transition-colors">Satellite</button>
             </div>
           </div>
         </main>

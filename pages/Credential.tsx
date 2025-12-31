@@ -1,8 +1,150 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix for default marker icon in Leaflet
+const icon = new L.Icon({
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+// Component to auto-fit map bounds
+const MapUpdater = ({ start, end }: { start: [number, number], end: [number, number] }) => {
+    const map = useMap();
+
+    useEffect(() => {
+        if (start && end) {
+            const bounds = L.latLngBounds([start, end]);
+            map.fitBounds(bounds, { padding: [30, 30] });
+        }
+    }, [start, end, map]);
+
+    return null;
+};
+
+// Mini Map Component for Cards
+const RouteMapCard = ({ route, onClick, onDelete, isOwnProfile }: { route: any, onClick: () => void, onDelete: () => void, isOwnProfile: boolean }) => {
+    const start = useMemo(() => [route.start_lat, route.start_lng] as [number, number], [route]);
+    const end = useMemo(() => [route.end_lat, route.end_lng] as [number, number], [route]);
+
+    // State for the actual curved path and live details
+    const [routePath, setRoutePath] = useState<[number, number][]>([]);
+    const [liveDuration, setLiveDuration] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchRouteGeometry = async () => {
+            if (!route.start_lat || !route.end_lat) return;
+
+            try {
+                // Fetch walking route from OSRM
+                const response = await fetch(
+                    `https://router.project-osrm.org/route/v1/walking/${route.start_lng},${route.start_lat};${route.end_lng},${route.end_lat}?overview=full&geometries=geojson`
+                );
+                const data = await response.json();
+
+                if (data.routes && data.routes[0] && isMounted) {
+                    const r = data.routes[0];
+                    // OSRM returns [lon, lat], Leaflet needs [lat, lon]
+                    const coordinates = r.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]] as [number, number]);
+                    setRoutePath(coordinates);
+
+                    // Calculate live duration for walking MANUALLY
+                    // Speed: 4.5 km/h
+                    const distKm = r.distance / 1000;
+                    const totalHours = distKm / 4.5;
+                    const hours = Math.floor(totalHours);
+                    const minutes = Math.round((totalHours - hours) * 60);
+
+                    let timeString = '';
+                    if (hours > 0) timeString += `${hours}h `;
+                    timeString += `${minutes}min`;
+                    setLiveDuration(timeString);
+                }
+            } catch (error) {
+                console.error("Error fetching card route preview:", error);
+            }
+        };
+
+        fetchRouteGeometry();
+
+        return () => { isMounted = false; };
+    }, [route.start_lat, route.start_lng, route.end_lat, route.end_lng]);
+
+    return (
+        <div
+            className="group relative bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden aspect-square cursor-pointer hover:shadow-lg transition-all"
+            onClick={onClick}
+        >
+            {/* Map Preview */}
+            <div className="absolute inset-0 z-0">
+                <MapContainer
+                    center={start}
+                    zoom={13}
+                    zoomControl={false}
+                    scrollWheelZoom={false}
+                    dragging={false}
+                    touchZoom={false}
+                    doubleClickZoom={false}
+                    attributionControl={false}
+                    className="w-full h-full"
+                    style={{ background: '#f0f0f0' }}
+                >
+                    <TileLayer
+                        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                    />
+                    <MapUpdater start={start} end={end} />
+                    <Marker position={start} icon={icon} />
+                    <Marker position={end} icon={icon} />
+                    {/* Render curved path if available, otherwise straight line */}
+                    <Polyline
+                        positions={routePath.length > 0 ? routePath : [start, end]}
+                        color="#16a34a"
+                        weight={4}
+                        opacity={0.8}
+                    />
+                </MapContainer>
+            </div>
+
+            {/* Overlay Gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity z-10" />
+
+            {/* Content */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 text-white z-20">
+                <h4 className="font-bold text-lg leading-tight mb-1 truncate shadow-sm">{route.name}</h4>
+                <div className="flex items-center gap-3 text-xs font-medium text-white/90">
+                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">straighten</span> {route.distance_km}</span>
+                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">schedule</span> {liveDuration || route.duration_text}</span>
+                </div>
+            </div>
+
+            {/* Delete Button (Top Right) */}
+            {isOwnProfile && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                    }}
+                    className="absolute top-2 right-2 p-2 bg-white/10 hover:bg-red-500/80 backdrop-blur-md text-white rounded-full opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100 z-30"
+                    title="Delete Route"
+                >
+                    <span className="material-symbols-outlined text-[18px] flex">delete</span>
+                </button>
+            )}
+        </div>
+    );
+};
 
 interface Props {
-    onNavigate: (view: any, profileId?: string | null) => void;
+    // ... rest of file
+    onNavigate: (view: any, profileId?: string | null, routeId?: string | null) => void;
     language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
     setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
     openAuth: (mode: 'login' | 'register') => void;
@@ -32,6 +174,7 @@ const Credential = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
+    const [savedRoutes, setSavedRoutes] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchResults = async () => {
@@ -86,6 +229,14 @@ const Credential = ({
                 .eq('following_id', targetUserId);
             setIsFollowing(followCheck && followCheck.length > 0);
         }
+
+        // 4. Fetch Saved Routes
+        const { data: routes } = await supabase
+            .from('user_routes')
+            .select('*')
+            .eq('user_id', targetUserId)
+            .order('created_at', { ascending: false });
+        setSavedRoutes(routes || []);
 
         setLoading(false);
     };
@@ -160,7 +311,6 @@ const Credential = ({
         };
     }, [targetUserId, user]);
 
-    // Real-time notifications listener removed - handled by App.tsx
 
     const handleFollow = async () => {
         if (!user || isOwnProfile) return;
@@ -283,15 +433,24 @@ const Credential = ({
         }
     };
 
-    // markAllAsRead removed - handled by App.tsx
+    const handleDeleteRoute = async (routeId: string) => {
+        if (!confirm('Are you sure you want to delete this specific route plan?')) return;
+
+        const { error } = await supabase
+            .from('user_routes')
+            .delete()
+            .eq('id', routeId);
+
+        if (!error) {
+            setSavedRoutes(prev => prev.filter(r => r.id !== routeId));
+        }
+    };
 
     const metrics = {
         following: counts.following,
         followers: counts.followers,
         friends: counts.friends
     };
-
-    // unreadCount removed - handled by App.tsx
 
     const t = {
         followers: language === 'en' ? 'Followers' : 'Seguidores',
@@ -325,9 +484,7 @@ const Credential = ({
                             </div>
                             <nav className="hidden md:flex items-center gap-6 pr-4">
                                 <button onClick={() => onNavigate('Landing')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">{language === 'en' ? 'Home' : 'Inicio'}</button>
-                                <button onClick={() => onNavigate('Planner')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">{t.plan}</button>
-                                <button onClick={() => onNavigate('Community')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">Community</button>
-                                <button onClick={() => onNavigate('Credential')} className={`text-sm font-medium transition-colors ${isOwnProfile ? 'font-bold text-primary' : 'text-slate-600 dark:text-slate-300 hover:text-primary'}`}>{t.dashboard}</button>
+                                {/* Nav Links Removed as requested by user */}
                             </nav>
 
                             {/* Global Search Bar */}
@@ -563,6 +720,38 @@ const Credential = ({
                             <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-primary text-center">{t.friends}</p>
                         </div>
                     </div>
+                </div>
+
+                {/* Saved Routes Section */}
+                <div className="max-w-4xl mx-auto mt-12">
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary">map</span>
+                        {language === 'en' ? 'Saved Journeys' : 'Rutas Guardadas'}
+                    </h3>
+
+                    {savedRoutes.length > 0 ? (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
+                            {savedRoutes.map(route => (
+                                <RouteMapCard
+                                    key={route.id}
+                                    route={route}
+                                    onClick={() => onNavigate('Planner', null, route.id)}
+                                    onDelete={() => handleDeleteRoute(route.id)}
+                                    isOwnProfile={isOwnProfile}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                            <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">map</span>
+                            <p className="text-slate-500 dark:text-slate-400 font-medium">{language === 'en' ? 'No saved routes yet.' : 'No hay rutas guardadas aún.'}</p>
+                            {isOwnProfile && (
+                                <button onClick={() => onNavigate('Planner')} className="mt-4 text-primary font-bold hover:underline">
+                                    {language === 'en' ? 'Plan a route' : 'Planificar una ruta'}
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* List Modal */}

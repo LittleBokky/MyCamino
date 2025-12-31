@@ -28,6 +28,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -99,9 +100,10 @@ export default function App() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const handleNavigate = (view: ViewName, profileId: string | null = null) => {
-    if (view === currentView && profileId === selectedProfileId) return;
+  const handleNavigate = (view: ViewName, profileId: string | null = null, routeId: string | null = null) => {
+    if (view === currentView && profileId === selectedProfileId && routeId === selectedRouteId) return;
     setSelectedProfileId(profileId);
+    setSelectedRouteId(routeId);
     setCurrentView(view);
     setAnimationKey(prev => prev + 1); // Reset animation on nav
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -177,6 +179,7 @@ export default function App() {
     user: session?.user ?? null,
     onSignOut: handleSignOut,
     selectedProfileId: selectedProfileId,
+    selectedRouteId: selectedRouteId,
     notifications,
     unreadCount: notifications.filter(n => !n.read).length,
     showNotifications,
