@@ -307,10 +307,15 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
                     // Mark as read if not sent by current user
                     if (user && payload.new.sender_id !== user.id) {
+                        // Mark as read locally immediately for UI consistency (if we track read state in UI)
+                        // Background update
                         await supabase
                             .from('messages')
                             .update({ read: true })
                             .eq('id', payload.new.id);
+                        
+                         // Refresh conversation list to update unread badge
+                         fetchConversations();
                     }
                 }
             )
