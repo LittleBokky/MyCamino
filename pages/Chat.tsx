@@ -286,6 +286,7 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                     filter: `conversation_id=eq.${selectedConversation}`,
                 },
                 async (payload) => {
+                    console.log('New message received via Realtime:', payload);
                     // Start: Ignore own messages to prevent duplication (handled optimistically)
                     if (user && payload.new.sender_id === user.id) {
                         return;
@@ -307,19 +308,21 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
                     // Mark as read if not sent by current user
                     if (user && payload.new.sender_id !== user.id) {
-                        // Mark as read locally immediately for UI consistency (if we track read state in UI)
+                        // Mark as read locally immediately for UI consistency
                         // Background update
                         await supabase
                             .from('messages')
                             .update({ read: true })
                             .eq('id', payload.new.id);
-                        
-                         // Refresh conversation list to update unread badge
-                         fetchConversations();
+
+                        // Refresh conversation list to update unread badge
+                        fetchConversations();
                     }
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log(`Realtime subscription status for conversation ${selectedConversation}:`, status);
+            });
 
         return () => {
             supabase.removeChannel(channel);
