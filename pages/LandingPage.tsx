@@ -36,6 +36,28 @@ const LandingPage = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (searchQuery.length < 2) {
+        setSearchResults([]);
+        setShowDropdown(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url')
+        .or(`full_name.ilike.%${searchQuery}%,username.ilike.%${searchQuery}%`)
+        .limit(5);
+      setSearchResults(data || []);
+      setShowDropdown(true);
+    };
+
+    const timer = setTimeout(fetchResults, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     const fetchPilgrims = async () => {
@@ -228,7 +250,83 @@ const LandingPage = ({
               <button onClick={() => onNavigate('Planner')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.map}</button>
               <button onClick={() => onNavigate('Community')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.community}</button>
               <button onClick={() => onNavigate('Contact')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{language === 'en' ? 'Contact' : 'Contacto'}</button>
+            </nav>
 
+            {/* Global Search Bar in Navbar */}
+            <div className="flex-1 max-w-[240px] px-4 hidden lg:block relative">
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors text-xl">search</span>
+                </div>
+                <input
+                  type="text"
+                  className="block w-full pl-10 pr-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-none text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400"
+                  placeholder={language === 'en' ? 'Search pilgrims...' : 'Buscar peregrinos...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      onNavigate('Community');
+                      setShowDropdown(false);
+                    }
+                  }}
+                  onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                  onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+                />
+              </div>
+
+              {/* Search Suggestions Dropdown */}
+              {showDropdown && searchResults.length > 0 && (
+                <div className="absolute top-full left-4 right-4 mt-2 bg-white dark:bg-[#1a2b21] border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-2 border-b border-slate-50 dark:border-slate-800">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-2">
+                      {language === 'en' ? 'Suggested' : 'Sugerencias'}
+                    </p>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {searchResults.map((res) => (
+                      <div
+                        key={res.id}
+                        className="p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group"
+                        onClick={() => {
+                          onNavigate('Credential', res.id);
+                          setSearchQuery('');
+                          setShowDropdown(false);
+                        }}
+                      >
+                        <img
+                          src={res.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.full_name || 'P')}&background=random`}
+                          className="size-10 rounded-xl object-cover ring-2 ring-transparent group-hover:ring-primary/20 transition-all"
+                          alt=""
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate text-slate-900 dark:text-white group-hover:text-primary transition-colors">
+                            {res.full_name || 'Peregrino'}
+                          </p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                            @{res.username || 'peregrino'}
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors text-lg">chevron_right</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className="p-3 bg-slate-50 dark:bg-slate-800/30 text-center cursor-pointer hover:bg-primary/10 transition-colors"
+                    onClick={() => {
+                      onNavigate('Community');
+                      setShowDropdown(false);
+                    }}
+                  >
+                    <p className="text-xs font-black text-primary uppercase tracking-wide">
+                      {language === 'en' ? 'See all results' : 'Ver todos los resultados'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-6">
               <button
                 onClick={toggleLanguage}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-300 text-xs font-bold text-[#0e1b14] dark:text-white"
@@ -302,7 +400,7 @@ const LandingPage = ({
                   <button onClick={() => openAuth('login')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.login}</button>
                 </>
               )}
-            </nav>
+            </div>
             <button onClick={() => onNavigate('Packs')} className="flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-6 bg-primary hover:bg-primary-dark text-white text-sm font-bold transition-all shadow-lg shadow-primary/20 active:scale-95">
               <span className="truncate">{t.plan}</span>
             </button>
@@ -326,6 +424,71 @@ const LandingPage = ({
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="lg:hidden flex flex-col gap-4 mt-4 py-4 border-t border-gray-100 dark:border-gray-800 animate-slide-up">
+            {/* Mobile Search Bar */}
+            <div className="relative group px-1 mb-2">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className="material-symbols-outlined text-slate-400 text-xl">search</span>
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-10 pr-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border-none text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400"
+                placeholder={t.searchPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onNavigate('Community');
+                    setShowDropdown(false);
+                    setIsMobileMenuOpen(false);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+              />
+
+              {/* Mobile Search Suggestions */}
+              {showDropdown && searchResults.length > 0 && (
+                <div className="mt-2 bg-white dark:bg-[#1a2b21] border border-slate-100 dark:border-slate-800 rounded-2xl shadow-lg overflow-hidden">
+                  {searchResults.map((res) => (
+                    <div
+                      key={res.id}
+                      className="p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-0"
+                      onClick={() => {
+                        onNavigate('Credential', res.id);
+                        setSearchQuery('');
+                        setShowDropdown(false);
+                        setIsMobileMenuOpen(false);
+                      }}
+                    >
+                      <img
+                        src={res.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.full_name || 'P')}&background=random`}
+                        className="size-8 rounded-lg object-cover"
+                        alt=""
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate text-slate-900 dark:text-white">
+                          {res.full_name || 'Peregrino'}
+                        </p>
+                      </div>
+                      <span className="material-symbols-outlined text-slate-300 text-sm">chevron_right</span>
+                    </div>
+                  ))}
+                  <div
+                    className="p-3 bg-slate-50 dark:bg-slate-800/30 text-center cursor-pointer"
+                    onClick={() => {
+                      onNavigate('Community');
+                      setShowDropdown(false);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <p className="text-xs font-black text-primary uppercase tracking-wide">
+                      {language === 'en' ? 'See all' : 'Ver todos'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button onClick={() => { onNavigate('Landing'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.home}</button>
             <button onClick={() => { onNavigate('Planner'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.map}</button>
             <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.community}</button>
@@ -377,95 +540,7 @@ const LandingPage = ({
         </div>
       </div>
 
-      {/* Pilgrim Search Section */}
-      <section className="flex justify-center py-24 px-4 md:px-10 lg:px-20 bg-white dark:bg-[#0c1811] relative overflow-hidden">
-        <div className="flex flex-col max-w-[1000px] flex-1 gap-12 relative z-10">
-          <div className="text-center">
-            <h2 className="text-[#0e1b14] dark:text-white text-4xl font-black tracking-tight mb-4">
-              {t.communityTitle}
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-lg">
-              {t.communitySub}
-            </p>
-          </div>
 
-          {/* Search Bar */}
-          <div className="relative max-w-xl mx-auto w-full group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span className="material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors">search</span>
-            </div>
-            <input
-              type="text"
-              className="block w-full pl-12 pr-4 py-4 rounded-2xl bg-gray-50 dark:bg-surface-dark border-2 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-white text-lg focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-sm outline-none"
-              placeholder={t.searchPlaceholder}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Results */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredPilgrims.length > 0 ? (
-              filteredPilgrims.map((pilgrim) => (
-                <div
-                  key={pilgrim.id}
-                  className="bg-background-light dark:bg-surface-dark rounded-3xl p-6 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 group flex flex-col animate-scale-in"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="relative cursor-pointer" onClick={() => onNavigate('Credential', pilgrim.id)}>
-                      <img
-                        src={pilgrim.avatar}
-                        alt={pilgrim.name}
-                        className="size-16 rounded-2xl object-cover ring-2 ring-white dark:ring-slate-700 group-hover:scale-105 transition-transform"
-                      />
-                      <div className={`absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-white dark:border-surface-dark ${pilgrim.status === 'walking' ? 'bg-orange-500' :
-                        pilgrim.status === 'resting' ? 'bg-blue-500' : 'bg-primary'
-                        }`} />
-                    </div>
-                    <div className="text-2xl">{pilgrim.nationality}</div>
-                  </div>
-
-                  <div className="mb-6 flex-1">
-                    <h3
-                      className="text-lg font-black text-slate-900 dark:text-white mb-1 cursor-pointer hover:text-primary transition-colors"
-                      onClick={() => onNavigate('Credential', pilgrim.id)}
-                    >
-                      {pilgrim.name}
-                    </h3>
-                    <div className="flex flex-col gap-1 text-xs font-semibold">
-                      <div className="text-primary flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px]">map</span>
-                        {pilgrim.way}
-                      </div>
-                      <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px]">location_on</span>
-                        {pilgrim.stage}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleFollow(pilgrim.id)}
-                    className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 active:scale-95 ${pilgrim.isFollowing
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                      : 'bg-primary hover:bg-primary-dark text-white'
-                      }`}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">
-                      {pilgrim.isFollowing ? 'check_circle' : 'person_add'}
-                    </span>
-                    {pilgrim.isFollowing ? t.following : t.follow}
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-10">
-                <p className="text-slate-400 font-bold italic">{t.noPilgrims}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* Routes */}
       <section className="flex justify-center py-24 px-4 md:px-10 lg:px-20 bg-background-light dark:bg-background-dark">

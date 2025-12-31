@@ -29,6 +29,29 @@ const Credential = ({
     const [listLoading, setListLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+
+    useEffect(() => {
+        const fetchResults = async () => {
+            if (searchQuery.length < 2) {
+                setSearchResults([]);
+                setShowDropdown(false);
+                return;
+            }
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, full_name, username, avatar_url')
+                .or(`full_name.ilike.%${searchQuery}%,username.ilike.%${searchQuery}%`)
+                .limit(5);
+            setSearchResults(data || []);
+            setShowDropdown(true);
+        };
+
+        const timer = setTimeout(fetchResults, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // If selectedProfileId exists, we are viewing that specific user. Otherwise, we view the logged-in user.
     const targetUserId = selectedProfileId || user?.id;
@@ -36,66 +59,105 @@ const Credential = ({
 
     const displayName = profile?.full_name || (isOwnProfile ? (user?.user_metadata?.full_name || user?.email?.split('@')[0]) : 'Peregrino');
 
-    useEffect(() => {
-        const fetchData = async () => {
-            if (!targetUserId) {
-                setLoading(false);
-                return;
-            }
-
-            setLoading(true);
-            // 1. Fetch Profile Info
-            const { data: profileData } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', targetUserId)
-                .single();
-            if (profileData) setProfile(profileData);
-
-            // 2. Fetch Real-time Counts
-            const { count: followingCount } = await supabase
-                .from('follows')
-                .select('*', { count: 'exact', head: true })
-                .eq('follower_id', targetUserId);
-
-            const { count: followersCount } = await supabase
-                .from('follows')
-                .select('*', { count: 'exact', head: true })
-                .eq('following_id', targetUserId);
-
-            // 3. Fetch Mutual Friends
-            const { data: following } = await supabase.from('follows').select('following_id').eq('follower_id', targetUserId);
-            const { data: followers } = await supabase.from('follows').select('follower_id').eq('following_id', targetUserId);
-
-            const followingIds = following?.map(f => f.following_id) || [];
-            const followerIds = followers?.map(f => f.follower_id) || [];
-            const friends = followingIds.filter(id => followerIds.includes(id)).length;
-
-            setCounts({
-                following: followingCount || 0,
-                followers: followersCount || 0,
-                friends: friends
-            });
-
-            // 4. Check if current user follows this profile
-            if (user && !isOwnProfile) {
-                const { data: followCheck } = await supabase
-                    .from('follows')
-                    .select('*')
-                    .eq('follower_id', user.id)
-                    .eq('following_id', targetUserId)
-                    .single();
-                setIsFollowing(!!followCheck);
-            }
-
-            // 5. Fetch Notifications removed - handled by App.tsx
-
+    const fetchData = async () => {
+        if (!targetUserId) {
             setLoading(false);
-        };
+            return;
+        }
 
+        setLoading(true);
+        // 1. Fetch Profile Info
+        const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', targetUserId)
+            .single();
+        if (profileData) setProfile(profileData);
+
+        // 2. Fetch Counts
+        await updateCounts();
+
+        // 3. Check if current user follows this profile
+        if (user && !isOwnProfile) {
+            const { data: followCheck } = await supabase
+                .from('follows')
+                .select('*')
+                .eq('follower_id', user.id)
+                .eq('following_id', targetUserId);
+            setIsFollowing(followCheck && followCheck.length > 0);
+        }
+
+        setLoading(false);
+    };
+
+    const updateCounts = async () => {
+        if (!targetUserId) return;
+
+        const { count: followingCount } = await supabase
+            .from('follows')
+            .select('*', { count: 'exact', head: true })
+            .eq('follower_id', targetUserId);
+
+        const { count: followersCount } = await supabase
+            .from('follows')
+            .select('*', { count: 'exact', head: true })
+            .eq('following_id', targetUserId);
+
+        // Mutual Friends
+        const { data: following } = await supabase.from('follows').select('following_id').eq('follower_id', targetUserId);
+        const { data: followers } = await supabase.from('follows').select('follower_id').eq('following_id', targetUserId);
+
+        const followingIds = following?.map(f => f.following_id) || [];
+        const followerIds = followers?.map(f => f.follower_id) || [];
+        const friends = followingIds.filter(id => followerIds.includes(id)).length;
+
+        setCounts({
+            following: followingCount || 0,
+            followers: followersCount || 0,
+            friends: friends
+        });
+
+        // Also update list if it's open
+        if (activeList) {
+            fetchList(activeList);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
-        // Reset modal when switching profiles
-        setActiveList(null);
+
+        // Real-time subscription for follows
+        const followChannel = supabase
+            .channel(`profile-follows-${targetUserId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'follows',
+                filter: `follower_id=eq.${targetUserId}`
+            }, () => updateCounts())
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'follows',
+                filter: `following_id=eq.${targetUserId}`
+            }, () => updateCounts())
+            .subscribe();
+
+        // Real-time for profile updates
+        const profileChannel = supabase
+            .channel(`profile-data-${targetUserId}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${targetUserId}`
+            }, (payload) => setProfile(payload.new))
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(followChannel);
+            supabase.removeChannel(profileChannel);
+        };
     }, [targetUserId, user]);
 
     // Real-time notifications listener removed - handled by App.tsx
@@ -261,12 +323,67 @@ const Credential = ({
                                 <span className="material-symbols-outlined text-4xl text-primary">hiking</span>
                                 <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">MyCamino</h2>
                             </div>
-                            <nav className="hidden md:flex items-center gap-6">
+                            <nav className="hidden md:flex items-center gap-6 pr-4">
                                 <button onClick={() => onNavigate('Landing')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">{language === 'en' ? 'Home' : 'Inicio'}</button>
                                 <button onClick={() => onNavigate('Planner')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">{t.plan}</button>
                                 <button onClick={() => onNavigate('Community')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">Community</button>
                                 <button onClick={() => onNavigate('Credential')} className={`text-sm font-medium transition-colors ${isOwnProfile ? 'font-bold text-primary' : 'text-slate-600 dark:text-slate-300 hover:text-primary'}`}>{t.dashboard}</button>
                             </nav>
+
+                            {/* Global Search Bar */}
+                            <div className="hidden lg:block w-64 group relative">
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span className="material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors text-xl">search</span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="block w-full pl-10 pr-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400"
+                                        placeholder={language === 'en' ? 'Search pilgrims...' : 'Buscar peregrinos...'}
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') onNavigate('Community');
+                                        }}
+                                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                                        onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+                                    />
+                                </div>
+
+                                {/* Search Suggestions Dropdown */}
+                                {showDropdown && searchResults.length > 0 && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="max-h-80 overflow-y-auto">
+                                            {searchResults.map((res) => (
+                                                <div
+                                                    key={res.id}
+                                                    className="p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group"
+                                                    onClick={() => {
+                                                        onNavigate('Credential', res.id);
+                                                        setSearchQuery('');
+                                                        setShowDropdown(false);
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={res.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.full_name || 'P')}&background=random`}
+                                                        className="size-10 rounded-xl object-cover"
+                                                        alt=""
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-bold truncate text-slate-900 dark:text-white group-hover:text-primary transition-colors">
+                                                            {res.full_name || 'Peregrino'}
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                                            @{res.username || 'peregrino'}
+                                                        </p>
+                                                    </div>
+                                                    <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors text-lg">chevron_right</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div className="flex items-center gap-4">
                             {isOwnProfile && (
@@ -381,7 +498,9 @@ const Credential = ({
                     </div>
 
                     <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2">{displayName}</h1>
-                    <p className="text-slate-500 dark:text-slate-400 font-medium">@{profile?.username || 'peregrino'}</p>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">
+                        {profile?.username || (isOwnProfile ? user?.user_metadata?.username : '@peregrino')}
+                    </p>
 
                     {!isOwnProfile && (
                         <div className="mt-6 flex gap-3">

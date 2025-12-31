@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface Pilgrim {
   id: string;
   name: string;
+  username: string;
   avatar: string;
   way: string;
   stage: string;
@@ -25,22 +27,122 @@ interface Props {
   markAllAsRead: () => void;
 }
 
-const INITIAL_PILGRIMS: Pilgrim[] = [
-  { id: '1', name: 'Mateo Rossi', avatar: 'https://i.pravatar.cc/150?u=mateo', way: 'Camino Francés', stage: 'Burgos', nationality: '🇮🇹', isFollowing: false, status: 'walking' },
-  { id: '2', name: 'Lucía Fernández', avatar: 'https://i.pravatar.cc/150?u=lucia', way: 'Camino Portugués', stage: 'Pontevedra', nationality: '🇪🇸', isFollowing: true, status: 'resting', isMutual: true },
-  { id: '3', name: 'Oliver Smith', avatar: 'https://i.pravatar.cc/150?u=oliver', way: 'Camino Francés', stage: 'Logroño', nationality: '🇬🇧', isFollowing: false, status: 'online' },
-  { id: '4', name: 'Sofia Müller', avatar: 'https://i.pravatar.cc/150?u=sofia', way: 'Camino del Norte', stage: 'Bilbao', nationality: '🇩🇪', isFollowing: false, status: 'walking' },
-  { id: '5', name: 'Jean Dupont', avatar: 'https://i.pravatar.cc/150?u=jean', way: 'Vía de la Plata', stage: 'Salamanca', nationality: '🇫🇷', isFollowing: true, status: 'online' },
-  { id: '6', name: 'Yuki Tanaka', avatar: 'https://i.pravatar.cc/150?u=yuki', way: 'Camino Francés', stage: 'Sarria', nationality: '🇯🇵', isFollowing: false, status: 'resting' },
-];
-
 const Community = ({
   onNavigate, language, user, notifications, unreadCount,
   showNotifications, setShowNotifications, markAllAsRead, onSignOut
 }: Props) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [pilgrims, setPilgrims] = useState<Pilgrim[]>(INITIAL_PILGRIMS);
+  const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'all' | 'friends' | 'nearby'>('all');
+  const [loading, setLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (searchQuery.length < 2) {
+        setSearchResults([]);
+        setShowDropdown(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url')
+        .or(`full_name.ilike.%${searchQuery}%,username.ilike.%${searchQuery}%`)
+        .limit(5);
+      setSearchResults(data || []);
+      setShowDropdown(true);
+    };
+
+    const timer = setTimeout(fetchResults, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch data
+  useEffect(() => {
+    fetchData();
+
+    // Listen for profile changes
+    const profileSub = supabase
+      .channel('community-profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
+      .subscribe();
+
+    // Listen for follow changes
+    const followSub = supabase
+      .channel('community-follows')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileSub);
+      supabase.removeChannel(followSub);
+    };
+  }, [user?.id]);
+
+  const fetchData = async () => {
+    try {
+      // 1. Fetch all profiles
+      let query = supabase.from('profiles').select('*');
+
+      // If logged in, exclude self
+      if (user?.id) {
+        query = query.neq('id', user.id);
+      }
+
+      const { data: profilesData } = await query;
+
+      // 2. Fetch people I follow
+      let followingSet = new Set<string>();
+      let mutualSet = new Set<string>();
+
+      if (user?.id) {
+        const { data: followingData } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+
+        followingData?.forEach(f => followingSet.add(f.following_id));
+
+        // 3. Check mutuals (friends)
+        const { data: followersOfMe } = await supabase
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', user.id);
+
+        followersOfMe?.forEach(f => {
+          if (followingSet.has(f.follower_id)) {
+            mutualSet.add(f.follower_id);
+          }
+        });
+      }
+
+      setFollowingIds(followingSet);
+      setMutualIds(mutualSet);
+
+      if (profilesData) {
+        const formatted: Pilgrim[] = profilesData.map(p => ({
+          id: p.id,
+          name: p.full_name || p.username || 'Peregrino',
+          username: p.username || '@peregrino',
+          avatar: p.avatar_url || `https://i.pravatar.cc/150?u=${p.id}`,
+          way: p.way || 'Camino por definir',
+          stage: p.country ? `Desde ${p.country}` : 'En ruta',
+          nationality: p.country === 'ES' ? '🇪🇸' : p.country === 'PT' ? '🇵🇹' : p.country === 'FR' ? '🇫🇷' : p.country === 'IT' ? '🇮🇹' : p.country === 'DE' ? '🇩🇪' : p.country === 'GB' ? '🇬🇧' : p.country === 'US' ? '🇺🇸' : '🏳️',
+          isFollowing: followingSet.has(p.id),
+          isMutual: mutualSet.has(p.id),
+          status: 'online'
+        }));
+        setPilgrims(formatted);
+      }
+    } catch (error) {
+      console.error('Error fetching community data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const t = {
     title: language === 'en' ? 'Community' : 'Comunidad',
@@ -52,12 +154,44 @@ const Community = ({
     friends: language === 'en' ? 'Friends' : 'Amigos',
     nearby: language === 'en' ? 'Nearby' : 'Cercanos',
     empty: language === 'en' ? 'No pilgrims found.' : 'No se encontraron peregrinos.',
+    loading: language === 'en' ? 'Updating community...' : 'Actualizando comunidad...',
+    login: language === 'en' ? 'Login' : 'Iniciar Sesión',
   };
 
-  const handleFollow = (id: string) => {
-    setPilgrims(prev => prev.map(p =>
-      p.id === id ? { ...p, isFollowing: !p.isFollowing } : p
-    ));
+  const handleFollow = async (targetId: string) => {
+    if (!user) return;
+
+    const currentlyFollowing = followingIds.has(targetId);
+
+    if (currentlyFollowing) {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', user.id)
+        .eq('following_id', targetId);
+
+      if (!error) {
+        setFollowingIds(prev => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+      }
+    } else {
+      const { error } = await supabase
+        .from('follows')
+        .insert({ follower_id: user.id, following_id: targetId });
+
+      if (!error) {
+        setFollowingIds(prev => {
+          const next = new Set(prev);
+          next.add(targetId);
+          return next;
+        });
+      }
+    }
+    // Re-fetch to update mutuals etc quickly manually or wait for realtime
+    fetchData();
   };
 
   const filteredPilgrims = useMemo(() => {
@@ -70,8 +204,8 @@ const Community = ({
     if (activeTab === 'friends') {
       list = list.filter(p => p.isFollowing);
     } else if (activeTab === 'nearby') {
-      // Mock logic: those on French Way
-      list = list.filter(p => p.way === 'Camino Francés');
+      // Logic: same country/stage or just mock logic
+      list = list.slice(0, 5);
     }
 
     return list;
@@ -86,11 +220,74 @@ const Community = ({
             <span className="material-symbols-outlined text-primary text-3xl transition-transform group-hover:scale-110">hiking</span>
             <span className="text-xl font-black text-slate-900 dark:text-white">MyCamino</span>
           </div>
-          <nav className="hidden md:flex items-center gap-8">
-            <button onClick={() => onNavigate('Credential')} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">Dashboard</button>
-            <button onClick={() => onNavigate('Planner')} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">Planner</button>
-            <button className="text-sm font-black text-primary border-b-2 border-primary pb-0.5">{t.title}</button>
+          <nav className="hidden md:flex items-center gap-8 px-6">
+            {user && (
+              <button onClick={() => onNavigate('Credential')} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-primary transition-colors whitespace-nowrap">Dashboard</button>
+            )}
+            <button onClick={() => onNavigate('Planner')} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-primary transition-colors whitespace-nowrap">Planner</button>
+            <button className="text-sm font-black text-primary border-b-2 border-primary pb-0.5 whitespace-nowrap">{t.title}</button>
           </nav>
+
+          {/* Search Bar in Navbar */}
+          <div className="flex-1 max-w-md mx-6 hidden sm:block relative">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className="material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors text-xl">search</span>
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-10 pr-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-none text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                placeholder={t.searchPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Search Suggestions Dropdown */}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="max-h-80 overflow-y-auto">
+                  {searchResults.map((res) => (
+                    <div
+                      key={res.id}
+                      className="p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group"
+                      onClick={() => {
+                        onNavigate('Credential', res.id);
+                        setSearchQuery('');
+                        setShowDropdown(false);
+                      }}
+                    >
+                      <img
+                        src={res.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.full_name || 'P')}&background=random`}
+                        className="size-10 rounded-xl object-cover"
+                        alt=""
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate text-slate-900 dark:text-white group-hover:text-primary transition-colors">
+                          {res.full_name || 'Peregrino'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                          @{res.username || 'peregrino'}
+                        </p>
+                      </div>
+                      <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors text-lg">chevron_right</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-4">
             {user && (
               <div className="relative">
@@ -143,43 +340,43 @@ const Community = ({
                 )}
               </div>
             )}
-            <div
-              className="size-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm cursor-pointer hover:bg-primary/30 transition-colors"
-              onClick={() => onNavigate('Credential')}
-            >
-              {user?.user_metadata?.full_name?.[0] || 'MP'}
-            </div>
+            {user && (
+              <div
+                className="size-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm cursor-pointer hover:bg-primary/30 transition-colors"
+                onClick={() => onNavigate('Credential')}
+              >
+                {user?.user_metadata?.full_name?.[0] || 'MP'}
+              </div>
+            )}
+            {!user && (
+              <button
+                onClick={onSignOut}
+                className="text-sm font-bold text-primary hover:text-primary-dark transition-colors"
+              >
+                {t.login}
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
-        <div className="mb-10 text-center">
-          <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white mb-2">{t.title}</h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">{t.subtitle}</p>
-        </div>
 
-        {/* Search Bar */}
-        <div className="relative max-w-2xl mx-auto mb-10 group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <span className="material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors">search</span>
+        {/* Mobile Search Bar (Only visible on small screens) */}
+        <div className="sm:hidden mb-6">
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <span className="material-symbols-outlined text-slate-400">search</span>
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-12 pr-4 py-3 rounded-2xl bg-white dark:bg-surface-dark border-2 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-white"
+              placeholder={t.searchPlaceholder}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-          <input
-            type="text"
-            className="block w-full pl-12 pr-4 py-4 rounded-2xl bg-white dark:bg-surface-dark border-2 border-slate-100 dark:border-slate-800 text-slate-900 dark:text-white text-lg focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-sm"
-            placeholder={t.searchPlaceholder}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-          )}
         </div>
 
         {/* Tabs */}
@@ -228,7 +425,7 @@ const Community = ({
 
                 <div className="mb-6 flex-1">
                   <h3
-                    className="text-xl font-black text-slate-900 dark:text-white mb-1 flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
+                    className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
                     onClick={() => onNavigate('Credential', pilgrim.id)}
                   >
                     {pilgrim.name}
@@ -236,14 +433,15 @@ const Community = ({
                       <span className="material-symbols-outlined text-primary text-sm filled" title="Mutual Friend">handshake</span>
                     )}
                   </h3>
+                  <p className="text-xs font-bold text-slate-400 mb-2">{pilgrim.username}</p>
                   <div className="flex flex-col gap-1 text-sm font-semibold">
                     <div className="text-primary flex items-center gap-1">
                       <span className="material-symbols-outlined text-[16px]">map</span>
                       {pilgrim.way}
                     </div>
                     <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[16px]">location_on</span>
-                      {pilgrim.stage}
+                      <span className="material-symbols-outlined text-[16px]">public</span>
+                      {pilgrim.nationality}
                     </div>
                   </div>
                 </div>

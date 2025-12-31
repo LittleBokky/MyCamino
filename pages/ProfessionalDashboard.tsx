@@ -24,7 +24,7 @@ interface Message {
 }
 
 interface Props {
-    onNavigate: (view: any) => void;
+    onNavigate: (view: any, profileId?: string | null) => void;
     language: 'en' | 'es';
     toggleLanguage: () => void;
     openAuth: (mode: 'login' | 'register') => void;
@@ -47,6 +47,36 @@ const ProfessionalDashboard = ({ onNavigate, user, onSignOut }: Props) => {
         fetchMessages();
         fetchUserCount();
         if (activeTab === 'users') fetchUsers();
+
+        // Real-time subscription for profiles
+        const profileChannel = supabase
+            .channel('admin-profiles-realtime')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'profiles'
+            }, () => {
+                fetchUserCount();
+                if (activeTab === 'users') fetchUsers();
+            })
+            .subscribe();
+
+        // Real-time subscription for messages
+        const messageChannel = supabase
+            .channel('admin-messages-realtime')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'contact_messages'
+            }, () => {
+                fetchMessages();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(profileChannel);
+            supabase.removeChannel(messageChannel);
+        };
     }, [activeTab]);
 
     const fetchUsers = async () => {
@@ -360,7 +390,7 @@ const ProfessionalDashboard = ({ onNavigate, user, onSignOut }: Props) => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => onNavigate('Credential')} className="p-2 hover:bg-primary/10 text-gray-400 hover:text-primary rounded-lg transition-colors">
+                                                    <button onClick={() => onNavigate('Credential', u.id)} className="p-2 hover:bg-primary/10 text-gray-400 hover:text-primary rounded-lg transition-colors">
                                                         <span className="material-symbols-outlined">visibility</span>
                                                     </button>
                                                 </td>
