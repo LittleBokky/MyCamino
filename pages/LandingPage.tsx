@@ -454,8 +454,26 @@ const LandingPage = ({
               <span className="truncate">{t.plan}</span>
             </button>
           </div>
-          <div className="lg:hidden flex items-center gap-4">
-
+          <div className="lg:hidden flex items-center gap-3">
+            {user && (
+              <button
+                onClick={() => onNavigate('Credential')}
+                className="flex items-center group"
+                title={t.dashboardGo}
+              >
+                {user?.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="Profile"
+                    className="size-9 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all"
+                  />
+                ) : (
+                  <div className="size-9 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all">
+                    {(user?.user_metadata?.full_name || user?.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+              </button>
+            )}
             <button
               className="text-[#0e1b14] dark:text-white p-1"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -469,17 +487,44 @@ const LandingPage = ({
         {isMobileMenuOpen && (
           <div className="lg:hidden flex flex-col gap-4 mt-4 py-4 border-t border-gray-100 dark:border-gray-800 animate-slide-up">
             {/* Language Switcher Mobile */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
-              {languages.map((lang) => (
+            <div className="px-1">
+              <div className="relative">
                 <button
-                  key={lang.code}
-                  onClick={() => setLanguage(lang.code as any)}
-                  className={`flex flex-col items-center justify-center min-w-[60px] p-2 rounded-xl border transition-all ${language === lang.code ? 'bg-primary/10 border-primary text-primary' : 'bg-gray-50 dark:bg-gray-800 border-transparent text-gray-500 hover:bg-gray-100'}`}
+                  onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-primary transition-all"
                 >
-                  <span className="text-2xl mb-1">{lang.flag}</span>
-                  <span className="text-[10px] font-bold uppercase">{lang.code}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-xl">language</span>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                      {languages.find(l => l.code === language)?.label || 'Idioma'}
+                    </span>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-400">{showLanguageMenu ? 'expand_less' : 'expand_more'}</span>
                 </button>
-              ))}
+
+                {showLanguageMenu && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1a2b21] border border-slate-100 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="py-1 max-h-64 overflow-y-auto">
+                      {languages.map((lang) => (
+                        <button
+                          key={lang.code}
+                          onClick={() => {
+                            setLanguage(lang.code as any);
+                            setShowLanguageMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-3 transition-colors ${language === lang.code ? 'text-primary bg-primary/5' : 'text-slate-700 dark:text-gray-300'}`}
+                        >
+                          <span className="text-2xl">{lang.flag}</span>
+                          <span className="flex-1">{lang.label}</span>
+                          {language === lang.code && (
+                            <span className="material-symbols-outlined text-primary text-lg">check</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Mobile Search Bar */}
