@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 
 interface Props {
     onNavigate: (view: any) => void;
-    language: 'en' | 'es';
-    toggleLanguage: () => void;
+    language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+    setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
     user: any;
     onSignOut: () => void;
 }
 
-const Packs = ({ onNavigate, language, toggleLanguage, user, onSignOut }: Props) => {
+const Packs = ({ onNavigate, language, setLanguage, user, onSignOut }: Props) => {
     const [selectedDuration, setSelectedDuration] = useState<'5-7' | '7-10' | '10+'>('5-7');
 
     const t = {
@@ -43,7 +43,7 @@ const Packs = ({ onNavigate, language, toggleLanguage, user, onSignOut }: Props)
                     </div>
                     <div className="flex items-center gap-6">
                         <button
-                            onClick={toggleLanguage}
+                            onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-300 text-xs font-bold text-[#0e1b14] dark:text-white"
                         >
                             <span className="material-symbols-outlined text-[16px]">language</span>

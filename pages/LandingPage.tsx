@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { t as trans } from '../lib/translations';
 
 interface Pilgrim {
   id: string;
@@ -14,8 +15,8 @@ interface Pilgrim {
 
 interface Props {
   onNavigate: (view: any, profileId?: string | null) => void;
-  language: 'en' | 'es';
-  toggleLanguage: () => void;
+  language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+  setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
   openAuth: (mode: 'login' | 'register') => void;
   user: any;
   onSignOut: () => void;
@@ -29,7 +30,7 @@ interface Props {
 
 
 const LandingPage = ({
-  onNavigate, language, toggleLanguage, openAuth, user, onSignOut,
+  onNavigate, language, setLanguage, openAuth, user, onSignOut,
   notifications, unreadCount, showNotifications, setShowNotifications, markAllAsRead
 }: Props) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -38,6 +39,18 @@ const LandingPage = ({
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+
+  const languages = [
+    { code: 'es', label: 'Español', flag: '🇪🇸' },
+    { code: 'en', label: 'English', flag: '🇬🇧' },
+    { code: 'pt', label: 'Português', flag: '🇵🇹' },
+    { code: 'fr', label: 'Français', flag: '🇫🇷' },
+    { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
+    { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+    { code: 'zh', label: '中文', flag: '🇨🇳' },
+    { code: 'ja', label: '日本語', flag: '🇯🇵' },
+  ];
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -99,41 +112,32 @@ const LandingPage = ({
   }, [language, user]);
 
   const t = {
-    home: language === 'en' ? 'Home' : 'Inicio',
-    map: language === 'en' ? 'Map' : 'Mapa',
-    community: language === 'en' ? 'Community' : 'Comunidad',
-    login: language === 'en' ? 'Login' : 'Entrar',
-    logout: language === 'en' ? 'Sign Out' : 'Cerrar Sesión',
-    plan: language === 'en' ? 'Plan Your Camino' : 'Planifica tu Camino',
-    heroTitle: language === 'en' ? 'Your Compass for the' : 'Tu Brújula para el',
-    heroTitleAccent: language === 'en' ? 'Camino de Santiago' : 'Camino de Santiago',
-    heroSubtitle: language === 'en' ? 'The ultimate digital companion for your pilgrimage to Santiago de Compostela.' : 'Tu compañero digital definitivo para tu peregrinaje a Santiago de Compostela.',
-    startJourney: language === 'en' ? 'Start Your Journey' : 'Empieza tu Viaje',
-    communityTitle: language === 'en' ? 'Find Your Community' : 'Encuentra tu Comunidad',
-    communitySub: language === 'en' ? 'Search for fellow pilgrims currently on the path.' : 'Busca compañeros que estén recorriendo el camino ahora mismo.',
-    searchPlaceholder: language === 'en' ? 'Search by name, route or town...' : 'Busca por nombre, ruta o pueblo...',
-    follow: language === 'en' ? 'Follow' : 'Seguir',
-    following: language === 'en' ? 'Following' : 'Siguiendo',
-    noPilgrims: language === 'en' ? 'No pilgrims found matching your search.' : 'No se encontraron peregrinos que coincidan con tu búsqueda.',
-    routesTitle: language === 'en' ? 'Explore the Routes' : 'Explora las Rutas',
-    routesSub: language === 'en' ? 'Visualize your journey on the most popular paths.' : 'Visualiza tu viaje en las rutas más populares.',
-    frenchWay: language === 'en' ? 'French Way' : 'Camino Francés',
-    portugueseWay: language === 'en' ? 'Portuguese Way' : 'Camino Portugués',
-    frenchSub: language === 'en' ? 'The classic route starting from St. Jean Pied de Port, crossing the Pyrenees and the vast meseta.' : 'La ruta clásica que comienza en St. Jean Pied de Port, cruzando los Pirineos y la vasta meseta.',
-    portugueseSub: language === 'en' ? 'A stunning coastal journey starting from Lisbon or Porto, following the Atlantic breeze.' : 'Un impresionante viaje costero que comienza en Lisboa o Oporto, siguiendo la brisa del Atlántico.',
-    voicesTitle: language === 'en' ? 'Voices of the Way' : 'Voces del Camino',
-    voicesSub: language === 'en' ? 'Join the vibrant ecosystem of pilgrims and hosts.' : 'Únete al vibrante ecosistema de peregrinos y hospitaleros.',
-    ctaTitle: language === 'en' ? 'Ready to take the first step?' : '¿Listo para dar el primer paso?',
-    ctaSub: language === 'en' ? 'Join thousands of pilgrims on the journey of a lifetime.' : 'Únete a miles de peregrinos en el viaje de tu vida.',
-    dashboardGo: language === 'en' ? 'My Profile' : 'Mi Perfil',
-    readMore: language === 'en' ? 'Read more' : 'Leer más',
-    story: language === 'en' ? 'STORY' : 'HISTORIA',
-    pro: language === 'en' ? 'PRO' : 'PROFESIONAL',
-    event: language === 'en' ? 'EVENT' : 'EVENTO',
-    storyTitle: language === 'en' ? '"A Life Changing Walk"' : '"Un Viaje que Cambia Vidas"',
-    proTitle: language === 'en' ? 'Supporting the Journey' : 'Apoyando el Viaje',
-    eventTitle: language === 'en' ? 'Community Dinners' : 'Cenas Comunitarias',
-    voicesDesc: language === 'en' ? 'Experience the Camino through the eyes of those who walk it and those who make it possible every day.' : 'Experimenta el Camino a través de los ojos de quienes lo recorren y quienes lo hacen posible cada día.',
+    home: trans('home', language),
+    map: trans('map', language),
+    community: trans('community', language),
+    login: trans('login', language),
+    logout: trans('logout', language),
+    plan: trans('plan', language),
+    heroTitle: trans('heroTitle', language),
+    heroTitleAccent: trans('heroTitleAccent', language),
+    heroSubtitle: trans('heroSubtitle', language),
+    startJourney: trans('startJourney', language),
+    searchPlaceholder: trans('searchPlaceholder', language),
+    follow: trans('follow', language),
+    following: trans('following', language),
+    routesTitle: trans('routesTitle', language),
+    routesSub: trans('routesSub', language),
+    frenchWay: trans('frenchWay', language),
+    portugueseWay: trans('portugueseWay', language),
+    frenchSub: trans('frenchSub', language),
+    portugueseSub: trans('portugueseSub', language),
+    dashboardGo: trans('dashboard', language),
+    readMore: trans('readMore', language),
+    notifs: trans('notifications', language),
+    suggested: trans('suggested', language),
+    seeAllResults: trans('seeAllResults', language),
+    noNotifications: trans('noNotifications', language),
+    startedFollowing: trans('startedFollowing', language),
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -333,13 +337,35 @@ const LandingPage = ({
             </div>
 
             <div className="flex items-center gap-6">
-              <button
-                onClick={toggleLanguage}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-300 text-xs font-bold text-[#0e1b14] dark:text-white"
-              >
-                <span className="material-symbols-outlined text-[16px]">language</span>
-                {language === 'en' ? 'EN' : 'ES'}
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-300 text-xs font-bold text-[#0e1b14] dark:text-white"
+                >
+                  <span className="material-symbols-outlined text-[16px]">language</span>
+                  {language.toUpperCase()}
+                </button>
+
+                {showLanguageMenu && (
+                  <div className="absolute top-full right-0 mt-2 w-40 bg-white dark:bg-[#1a2b21] border border-slate-100 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden z-[100] animate-in fade-in zoom-in-50 duration-200">
+                    <div className="py-1">
+                      {languages.map((lang) => (
+                        <button
+                          key={lang.code}
+                          onClick={() => {
+                            setLanguage(lang.code as any);
+                            setShowLanguageMenu(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2 ${language === lang.code ? 'text-primary' : 'text-slate-700 dark:text-gray-300'}`}
+                        >
+                          <span className="text-sm">{lang.flag}</span>
+                          {lang.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {user ? (
                 <>
@@ -397,6 +423,23 @@ const LandingPage = ({
                       Admin
                     </button>
                   )}
+                  <button
+                    onClick={() => onNavigate('Credential')}
+                    className="flex items-center gap-2 group"
+                    title={t.dashboardGo}
+                  >
+                    {user?.user_metadata?.avatar_url ? (
+                      <img
+                        src={user.user_metadata.avatar_url}
+                        alt="Profile"
+                        className="size-9 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all"
+                      />
+                    ) : (
+                      <div className="size-9 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold ring-2 ring-slate-200 dark:ring-slate-700 group-hover:ring-primary transition-all">
+                        {(user?.user_metadata?.full_name || user?.email || 'U')[0].toUpperCase()}
+                      </div>
+                    )}
+                  </button>
                   <button onClick={onSignOut} className="nav-link text-red-500 text-sm font-semibold transition-colors">
                     {t.logout}
                   </button>
@@ -412,12 +455,7 @@ const LandingPage = ({
             </button>
           </div>
           <div className="lg:hidden flex items-center gap-4">
-            <button
-              onClick={toggleLanguage}
-              className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-bold text-[#0e1b14] dark:text-white"
-            >
-              {language === 'en' ? 'EN' : 'ES'}
-            </button>
+
             <button
               className="text-[#0e1b14] dark:text-white p-1"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -430,6 +468,20 @@ const LandingPage = ({
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="lg:hidden flex flex-col gap-4 mt-4 py-4 border-t border-gray-100 dark:border-gray-800 animate-slide-up">
+            {/* Language Switcher Mobile */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
+              {languages.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => setLanguage(lang.code as any)}
+                  className={`flex flex-col items-center justify-center min-w-[60px] p-2 rounded-xl border transition-all ${language === lang.code ? 'bg-primary/10 border-primary text-primary' : 'bg-gray-50 dark:bg-gray-800 border-transparent text-gray-500 hover:bg-gray-100'}`}
+                >
+                  <span className="text-2xl mb-1">{lang.flag}</span>
+                  <span className="text-[10px] font-bold uppercase">{lang.code}</span>
+                </button>
+              ))}
+            </div>
+
             {/* Mobile Search Bar */}
             <div className="relative group px-1 mb-2">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

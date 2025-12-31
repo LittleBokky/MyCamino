@@ -26,8 +26,8 @@ const ROUTE_LINE = STAGES.map(s => [...s.coords]) as [number, number][];
 
 interface Props {
   onNavigate: (view: any, profileId?: string | null) => void;
-  language: 'en' | 'es';
-  toggleLanguage: () => void;
+  language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+  setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
   openAuth: (mode: 'login' | 'register') => void;
   user?: any;
   onSignOut?: () => void;

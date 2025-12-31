@@ -16,8 +16,8 @@ interface Pilgrim {
 
 interface Props {
   onNavigate: (view: any, profileId?: string | null) => void;
-  language: 'en' | 'es';
-  toggleLanguage: () => void;
+  language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+  setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
   user?: any;
   onSignOut?: () => void;
   notifications: any[];

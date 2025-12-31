@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase';
 
 interface Props {
     onNavigate: (view: any, profileId?: string | null) => void;
-    language: 'en' | 'es';
-    toggleLanguage: () => void;
+    language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+    setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
     openAuth: (mode: 'login' | 'register') => void;
     user: any;
     onSignOut: () => void;
@@ -17,7 +17,7 @@ interface Props {
 }
 
 const Credential = ({
-    onNavigate, user, onSignOut, language, toggleLanguage, selectedProfileId,
+    onNavigate, user, onSignOut, language, setLanguage, selectedProfileId,
     notifications, unreadCount, showNotifications, setShowNotifications, markAllAsRead
 }: Props) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -530,33 +530,33 @@ const Credential = ({
                 </div>
 
                 <div className="max-w-4xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-3 gap-3 md:gap-6">
                         <div
                             onClick={() => fetchList('following')}
-                            className="bg-surface-light dark:bg-surface-dark p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-primary/50 transition-all hover:shadow-md active:scale-95"
+                            className="bg-surface-light dark:bg-surface-dark p-4 md:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-3 cursor-pointer hover:border-primary/50 transition-all hover:shadow-md active:scale-95"
                         >
-                            <span className="material-symbols-outlined text-primary bg-primary/10 p-3 rounded-2xl text-3xl">person_add</span>
-                            <span className="text-4xl font-black text-slate-900 dark:text-white">{metrics.following}</span>
-                            <p className="text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{t.following}</p>
+                            <span className="material-symbols-outlined text-primary bg-primary/10 p-2 md:p-3 rounded-xl md:rounded-2xl text-xl md:text-3xl">person_add</span>
+                            <span className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white">{metrics.following}</span>
+                            <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-center">{t.following}</p>
                         </div>
 
                         <div
                             onClick={() => fetchList('followers')}
-                            className="bg-surface-light dark:bg-surface-dark p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-primary/50 transition-all hover:shadow-md active:scale-95"
+                            className="bg-surface-light dark:bg-surface-dark p-4 md:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-3 cursor-pointer hover:border-primary/50 transition-all hover:shadow-md active:scale-95"
                         >
-                            <span className="material-symbols-outlined text-primary bg-primary/10 p-3 rounded-2xl text-3xl">group</span>
-                            <span className="text-4xl font-black text-slate-900 dark:text-white">{metrics.followers}</span>
-                            <p className="text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{t.followers}</p>
+                            <span className="material-symbols-outlined text-primary bg-primary/10 p-2 md:p-3 rounded-xl md:rounded-2xl text-xl md:text-3xl">group</span>
+                            <span className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white">{metrics.followers}</span>
+                            <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-center">{t.followers}</p>
                         </div>
 
                         <div
                             onClick={() => fetchList('friends')}
-                            className="bg-primary/5 dark:bg-primary/10 p-8 rounded-2xl border-2 border-primary/20 dark:border-primary/30 shadow-lg flex flex-col items-center justify-center gap-3 relative overflow-hidden cursor-pointer hover:bg-primary/10 transition-all active:scale-95"
+                            className="bg-primary/5 dark:bg-primary/10 p-4 md:p-8 rounded-2xl border-2 border-primary/20 dark:border-primary/30 shadow-lg flex flex-col items-center justify-center gap-1 md:gap-3 relative overflow-hidden cursor-pointer hover:bg-primary/10 transition-all active:scale-95"
                         >
                             <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/10 rounded-full blur-2xl"></div>
-                            <span className="material-symbols-outlined text-white bg-primary p-3 rounded-2xl text-3xl shadow-lg shadow-primary/30">volunteer_activism</span>
-                            <span className="text-4xl font-black text-primary">{metrics.friends}</span>
-                            <p className="text-sm font-bold uppercase tracking-widest text-primary">{t.friends}</p>
+                            <span className="material-symbols-outlined text-white bg-primary p-2 md:p-3 rounded-xl md:rounded-2xl text-xl md:text-3xl shadow-lg shadow-primary/30">volunteer_activism</span>
+                            <span className="text-2xl md:text-4xl font-black text-primary">{metrics.friends}</span>
+                            <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-primary text-center">{t.friends}</p>
                         </div>
                     </div>
                 </div>
@@ -586,16 +586,24 @@ const Credential = ({
                                     listData.map((person) => (
                                         <div key={person.id} className="flex items-center gap-4 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-2xl transition-all group">
                                             <div className="relative">
-                                                <img
-                                                    src={person.avatar_url || `https://i.pravatar.cc/150?u=${person.id}`}
-                                                    alt={person.full_name}
-                                                    className="size-12 rounded-xl object-cover ring-2 ring-slate-100 dark:ring-slate-800 group-hover:scale-105 transition-transform"
-                                                />
+                                                {person.avatar_url ? (
+                                                    <img
+                                                        src={person.avatar_url}
+                                                        alt={person.full_name}
+                                                        className="size-12 rounded-xl object-cover ring-2 ring-slate-100 dark:ring-slate-800 group-hover:scale-105 transition-transform"
+                                                    />
+                                                ) : (
+                                                    <div className="size-12 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-lg font-black ring-2 ring-slate-100 dark:ring-slate-800 group-hover:scale-105 transition-transform">
+                                                        {(person.full_name || 'P')[0]}
+                                                    </div>
+                                                )}
                                                 <div className="absolute -bottom-1 -right-1 size-3 bg-primary rounded-full border-2 border-white dark:border-surface-dark"></div>
                                             </div>
                                             <div className="flex-1">
                                                 <h4 className="font-bold text-slate-900 dark:text-white text-sm leading-tight group-hover:text-primary transition-colors">{person.full_name}</h4>
-                                                <p className="text-xs text-slate-500 dark:text-slate-400">@{person.username || 'peregrino'}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                    {person.username?.startsWith('@') ? person.username : `@${person.username || 'peregrino'}`}
+                                                </p>
                                             </div>
                                             <button
                                                 onClick={() => onNavigate('Credential', person.id)}

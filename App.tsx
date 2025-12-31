@@ -14,7 +14,7 @@ import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
 export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community' | 'Packs' | 'Contact' | 'Pro Dashboard' | 'Biz Profile' | 'Workshop' | 'Stage Details';
-export type Language = 'en' | 'es';
+export type Language = 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
 export type AuthMode = 'login' | 'register';
 
 export default function App() {
@@ -106,8 +106,8 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const toggleLanguage = () => {
-    setLanguage((prev) => (prev === 'en' ? 'es' : 'en'));
+  const setAppLanguage = (lang: Language) => {
+    setLanguage(lang);
   };
 
   const openAuth = (mode: AuthMode = 'login') => {
@@ -170,7 +170,7 @@ export default function App() {
   const pageProps = {
     onNavigate: handleNavigate,
     language,
-    toggleLanguage,
+    setLanguage: setAppLanguage,
     openAuth,
     session,
     user: session?.user ?? null,

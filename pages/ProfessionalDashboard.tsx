@@ -25,8 +25,8 @@ interface Message {
 
 interface Props {
     onNavigate: (view: any, profileId?: string | null) => void;
-    language: 'en' | 'es';
-    toggleLanguage: () => void;
+    language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+    setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
     openAuth: (mode: 'login' | 'register') => void;
     user?: any;
     onSignOut?: () => void;
@@ -135,6 +135,23 @@ const ProfessionalDashboard = ({ onNavigate, user, onSignOut }: Props) => {
 
         if (!error) {
             setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
+        }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+        if (!confirm('¿Estás seguro de que quieres eliminar PERMANENTEMENTE a este usuario? Esta acción no se puede deshacer.')) return;
+
+        try {
+            const { error } = await supabase.rpc('delete_user_by_admin', { target_user_id: userId });
+
+            if (error) throw error;
+
+            // Refresh list
+            setUsersList(prev => prev.filter(u => u.id !== userId));
+            alert('Usuario eliminado correctamente');
+        } catch (err: any) {
+            console.error('Error deleting user:', err);
+            alert('Error al eliminar usuario: ' + err.message);
         }
     };
 
@@ -392,6 +409,9 @@ const ProfessionalDashboard = ({ onNavigate, user, onSignOut }: Props) => {
                                                 <td className="px-6 py-4 text-right">
                                                     <button onClick={() => onNavigate('Credential', u.id)} className="p-2 hover:bg-primary/10 text-gray-400 hover:text-primary rounded-lg transition-colors">
                                                         <span className="material-symbols-outlined">visibility</span>
+                                                    </button>
+                                                    <button onClick={() => handleDeleteUser(u.id)} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors ml-2" title="Eliminar usuario permanentemente">
+                                                        <span className="material-symbols-outlined">delete_forever</span>
                                                     </button>
                                                 </td>
                                             </tr>

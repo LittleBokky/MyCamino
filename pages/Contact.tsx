@@ -3,12 +3,12 @@ import { supabase } from '../lib/supabase';
 
 interface Props {
     onNavigate: (view: any) => void;
-    language: 'en' | 'es';
-    toggleLanguage: () => void;
+    language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
+    setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
     user: any;
 }
 
-const Contact = ({ onNavigate, language, toggleLanguage, user }: Props) => {
+const Contact = ({ onNavigate, language, setLanguage, user }: Props) => {
     const [formData, setFormData] = useState({
         name: user?.user_metadata?.full_name || '',
         email: user?.email || '',
@@ -82,7 +82,7 @@ const Contact = ({ onNavigate, language, toggleLanguage, user }: Props) => {
                     </div>
                     <div className="flex items-center gap-6">
                         <button
-                            onClick={toggleLanguage}
+                            onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-300 text-xs font-bold text-[#0e1b14] dark:text-white"
                         >
                             <span className="material-symbols-outlined text-[16px]">language</span>
