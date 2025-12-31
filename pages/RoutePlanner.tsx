@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
 
@@ -193,6 +193,18 @@ const MapEvents = ({ onMapClick }: { onMapClick: (e: L.LeafletMouseEvent) => voi
   useMapEvents({
     click: (e) => onMapClick(e),
   });
+  return null;
+};
+
+// Fix for Leaflet not resizing correctly in flex containers
+const MapResizer = () => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 300); // Small delay to wait for container transition
+    return () => clearTimeout(timer);
+  }, [map]);
   return null;
 };
 
@@ -579,30 +591,33 @@ const RoutePlanner = ({
           </div>
         </aside>
 
-        <main className="flex-1 relative h-full bg-[#e5e7eb] w-full z-0">
-          <MapContainer center={[42.8125, -1.6458]} zoom={8} scrollWheelZoom={true} className="h-full w-full outline-none z-0" zoomControl={false}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapEvents onMapClick={handleMapClick} />
+        <main className="flex-1 relative h-full bg-[#e5e7eb] w-full z-0 overflow-hidden">
+          <div className="absolute inset-0">
+            <MapContainer center={[42.8125, -1.6458]} zoom={8} scrollWheelZoom={true} className="h-full w-full outline-none z-0" zoomControl={false}>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MapEvents onMapClick={handleMapClick} />
+              <MapResizer />
 
-            {startPoint && (
-              <Marker position={startPoint} icon={icon}>
-                <Popup>Start Point</Popup>
-              </Marker>
-            )}
+              {startPoint && (
+                <Marker position={startPoint} icon={icon}>
+                  <Popup>Start Point</Popup>
+                </Marker>
+              )}
 
-            {endPoint && (
-              <Marker position={endPoint} icon={icon}>
-                <Popup>End Point</Popup>
-              </Marker>
-            )}
+              {endPoint && (
+                <Marker position={endPoint} icon={icon}>
+                  <Popup>End Point</Popup>
+                </Marker>
+              )}
 
-            {routePath.length > 0 && (
-              <Polyline positions={routePath} color="#17cf73" weight={5} />
-            )}
-          </MapContainer>
+              {routePath.length > 0 && (
+                <Polyline positions={routePath} color="#17cf73" weight={5} />
+              )}
+            </MapContainer>
+          </div>
 
           {/* Mobile Map Toggle */}
           {!showListOnMobile && (
