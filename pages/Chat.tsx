@@ -49,6 +49,11 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
     const [selectedUserProfile, setSelectedUserProfile] = useState<any>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const selectedConversationRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        selectedConversationRef.current = selectedConversation;
+    }, [selectedConversation]);
 
     const t = {
         messages: language === 'en' ? 'Messages' : language === 'es' ? 'Mensajes' : 'Messages',
@@ -67,6 +72,8 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    const [clearedConversations, setClearedConversations] = useState<Set<string>>(new Set());
 
     // Reusable function to fetch conversations
     const fetchConversations = async () => {
@@ -125,7 +132,11 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
             setConversations(conversationsWithUsers.sort((a, b) =>
                 new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-            ));
+            ).map(conv => ({
+                ...conv,
+                // Force 0 unread if this conversation is open OR has been opened recently
+                unread_count: (conv.id === selectedConversationRef.current || clearedConversations.has(conv.id)) ? 0 : conv.unread_count
+            })));
         } catch (error) {
             console.error('Error fetching conversations:', error);
         } finally {
@@ -239,17 +250,31 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
         findOrCreateConversation();
     }, [selectedUserId, user]);
 
+    const isMarkingRead = useRef<boolean>(false);
+
+    // Handle selecting a conversation
+    const handleSelectConversation = (conversationId: string) => {
+        setSelectedConversation(conversationId);
+        // Track that this conversation is now "read" in this session
+        setClearedConversations(prev => new Set(prev).add(conversationId));
+        // Clear unread count locally for instant feedback
+        setConversations(prev => prev.map(conv =>
+            conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
+        ));
+    };
+
     // Fetch messages for selected conversation
     useEffect(() => {
         if (!selectedConversation) return;
 
-        const fetchMessages = async () => {
+        const fetchMessagesAndMarkRead = async () => {
+            // First fetch the messages
             const { data, error } = await supabase
                 .from('messages')
                 .select(`
-          *,
-          sender:profiles!sender_id(id, full_name, avatar_url)
-        `)
+                  *,
+                  sender:profiles!sender_id(id, full_name, avatar_url)
+                `)
                 .eq('conversation_id', selectedConversation)
                 .order('created_at', { ascending: true });
 
@@ -260,19 +285,34 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
             setMessages(data || []);
 
-            // Mark messages as read
+            // Immediately mark as read in DB if there are potentially unread messages
             if (user) {
-                await supabase
+                isMarkingRead.current = true;
+                const { error: updateError } = await supabase
                     .from('messages')
                     .update({ read: true })
                     .eq('conversation_id', selectedConversation)
-                    .neq('sender_id', user.id);
-                // Update unread count in sidebar immediately
-                fetchConversations();
+                    .neq('sender_id', user.id)
+                    .eq('read', false);
+
+                if (updateError) {
+                    console.error('Error marking messages as read:', updateError);
+                }
+
+                // Update local state even if DB update is slow/failed for better UX
+                setConversations(prev => prev.map(conv =>
+                    conv.id === selectedConversation ? { ...conv, unread_count: 0 } : conv
+                ));
+
+                // Wait a bit for DB consistency before allowing refresh
+                setTimeout(() => {
+                    isMarkingRead.current = false;
+                    fetchConversations();
+                }, 500);
             }
         };
 
-        fetchMessages();
+        fetchMessagesAndMarkRead();
 
         // Subscribe to new messages for THIS conversation
         const channel = supabase
@@ -286,12 +326,8 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                     filter: `conversation_id=eq.${selectedConversation}`,
                 },
                 async (payload) => {
-                    console.log('New message received via Realtime:', payload);
-                    // Start: Ignore own messages to prevent duplication (handled optimistically)
-                    if (user && payload.new.sender_id === user.id) {
-                        return;
-                    }
-                    // End: Ignore own messages
+                    console.log('New message in active chat:', payload);
+                    if (user && payload.new.sender_id === user.id) return;
 
                     const { data: senderData } = await supabase
                         .from('profiles')
@@ -299,30 +335,28 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                         .eq('id', payload.new.sender_id)
                         .single();
 
-                    const newMsg = {
-                        ...payload.new,
-                        sender: senderData,
-                    } as Message;
-
+                    const newMsg = { ...payload.new, sender: senderData } as Message;
                     setMessages((prev) => [...prev, newMsg]);
 
-                    // Mark as read if not sent by current user
-                    if (user && payload.new.sender_id !== user.id) {
-                        // Mark as read locally immediately for UI consistency
-                        // Background update
+                    // Since chat is open, mark this specific new message as read too
+                    if (user) {
+                        isMarkingRead.current = true;
                         await supabase
                             .from('messages')
                             .update({ read: true })
                             .eq('id', payload.new.id);
 
-                        // Refresh conversation list to update unread badge
-                        fetchConversations();
+                        setConversations(prev => prev.map(conv =>
+                            conv.id === selectedConversation ? { ...conv, unread_count: 0, last_message: newMsg } : conv
+                        ));
+
+                        setTimeout(() => {
+                            isMarkingRead.current = false;
+                        }, 500);
                     }
                 }
             )
-            .subscribe((status) => {
-                console.log(`Realtime subscription status for conversation ${selectedConversation}:`, status);
-            });
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
@@ -449,7 +483,7 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                             {conversations.map((conv) => (
                                 <div
                                     key={conv.id}
-                                    onClick={() => setSelectedConversation(conv.id)}
+                                    onClick={() => handleSelectConversation(conv.id)}
                                     className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 ${selectedConversation === conv.id ? 'bg-primary/5' : ''
                                         }`}
                                 >
