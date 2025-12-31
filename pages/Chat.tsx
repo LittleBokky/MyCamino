@@ -398,9 +398,9 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
 
     return (
-        <div className="bg-background-light dark:bg-background-dark min-h-screen flex flex-col font-display">
+        <div className="bg-background-light dark:bg-background-dark h-[100dvh] flex flex-col font-display overflow-hidden">
             {/* Header */}
-            <header className="sticky top-0 z-40 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#e7f3ed] dark:border-gray-800 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-6 py-4 lg:px-20">
+            <header className="sticky top-0 z-40 shrink-0 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#e7f3ed] dark:border-gray-800 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-6 py-4 lg:px-20">
                 <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onNavigate('Landing')}>
                     <div className="size-8 text-primary flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
                         <span className="material-symbols-outlined !text-3xl">hiking</span>
@@ -484,7 +484,7 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                 </div>
 
                 {/* Messages Area */}
-                <div className={`flex-1 flex flex-col bg-slate-50 dark:bg-background-dark ${selectedConversation ? 'fixed inset-0 z-50 md:static' : 'hidden md:flex'}`}>
+                <div className={`flex-1 flex flex-col bg-slate-50 dark:bg-background-dark ${selectedConversation ? 'fixed inset-0 z-50 md:static w-full h-full' : 'hidden md:flex'}`}>
                     {initializingChat ? (
                         <div className="flex-1 flex items-center justify-center bg-white dark:bg-background-dark">
                             <div className="size-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
