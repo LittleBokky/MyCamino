@@ -19,11 +19,19 @@ interface Props {
   openAuth: (mode: 'login' | 'register') => void;
   user: any;
   onSignOut: () => void;
+  notifications: any[];
+  unreadCount: number;
+  showNotifications: boolean;
+  setShowNotifications: (show: boolean) => void;
+  markAllAsRead: () => void;
 }
 
 
 
-const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onSignOut }: Props) => {
+const LandingPage = ({
+  onNavigate, language, toggleLanguage, openAuth, user, onSignOut,
+  notifications, unreadCount, showNotifications, setShowNotifications, markAllAsRead
+}: Props) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
@@ -219,6 +227,7 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
               <button onClick={() => onNavigate('Landing')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.home}</button>
               <button onClick={() => onNavigate('Planner')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.map}</button>
               <button onClick={() => onNavigate('Community')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.community}</button>
+              <button onClick={() => onNavigate('Contact')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{language === 'en' ? 'Contact' : 'Contacto'}</button>
 
               <button
                 onClick={toggleLanguage}
@@ -230,7 +239,60 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
 
               {user ? (
                 <>
-                  <button onClick={() => onNavigate('Credential')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.dashboardGo}</button>
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowNotifications(!showNotifications);
+                        if (!showNotifications) markAllAsRead();
+                      }}
+                      className="relative p-2 text-slate-400 hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-2xl">notifications</span>
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1.5 right-1.5 size-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-background-light">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {showNotifications && (
+                      <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in text-left">
+                        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                          <h4 className="font-black text-xs uppercase tracking-widest text-slate-400">
+                            {language === 'en' ? 'Notifications' : 'Notificaciones'}
+                          </h4>
+                        </div>
+                        <div className="max-h-96 overflow-y-auto">
+                          {notifications.length > 0 ? (
+                            notifications.map((n) => (
+                              <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => { onNavigate('Credential', n.actor_id); setShowNotifications(false); }}>
+                                <img
+                                  src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
+                                  className="size-10 rounded-xl object-cover"
+                                  alt=""
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
+                                    <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {language === 'en' ? 'started following you' : 'empezó a seguirte'}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-12 text-center text-slate-400 italic text-sm">
+                              {language === 'en' ? 'No new notifications' : 'No hay notificaciones'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {user?.email === 'mycaminoeu@gmail.com' && (
+                    <button onClick={() => onNavigate('Pro Dashboard')} className="nav-link text-primary text-sm font-bold transition-colors">
+                      Admin
+                    </button>
+                  )}
                   <button onClick={onSignOut} className="nav-link text-red-500 text-sm font-semibold transition-colors">
                     {t.logout}
                   </button>
@@ -241,8 +303,8 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
                 </>
               )}
             </nav>
-            <button onClick={() => user ? onNavigate('Credential') : openAuth('register')} className="flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-6 bg-primary hover:bg-primary-dark text-white text-sm font-bold transition-all shadow-lg shadow-primary/20 active:scale-95">
-              <span className="truncate">{user ? t.dashboardGo : t.plan}</span>
+            <button onClick={() => onNavigate('Packs')} className="flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-6 bg-primary hover:bg-primary-dark text-white text-sm font-bold transition-all shadow-lg shadow-primary/20 active:scale-95">
+              <span className="truncate">{t.plan}</span>
             </button>
           </div>
           <div className="lg:hidden flex items-center gap-4">
@@ -267,16 +329,20 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
             <button onClick={() => { onNavigate('Landing'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.home}</button>
             <button onClick={() => { onNavigate('Planner'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.map}</button>
             <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.community}</button>
+            <button onClick={() => { onNavigate('Contact'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{language === 'en' ? 'Contact' : 'Contacto'}</button>
             <div className="h-px bg-gray-100 dark:bg-gray-800 my-1"></div>
             {user ? (
               <>
                 <button onClick={() => { onNavigate('Credential'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.dashboardGo}</button>
+                {user?.email === 'mycaminoeu@gmail.com' && (
+                  <button onClick={() => { onNavigate('Pro Dashboard'); setIsMobileMenuOpen(false); }} className="text-left text-primary text-base font-bold py-2">Admin</button>
+                )}
                 <button onClick={() => { onSignOut(); setIsMobileMenuOpen(false); }} className="text-left text-red-500 text-base font-bold py-2">{t.logout}</button>
               </>
             ) : (
               <>
                 <button onClick={() => { openAuth('login'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.login}</button>
-                <button onClick={() => { openAuth('register'); setIsMobileMenuOpen(false); }} className="w-full mt-2 flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary hover:bg-primary-dark text-white text-sm font-bold shadow-md">
+                <button onClick={() => { onNavigate('Packs'); setIsMobileMenuOpen(false); }} className="w-full mt-2 flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary hover:bg-primary-dark text-white text-sm font-bold shadow-md">
                   {t.plan}
                 </button>
               </>
@@ -303,8 +369,8 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
               </h2>
             </div>
             <div className="flex justify-center mt-6 z-10 w-full max-w-lg animate-slide-up" style={{ animationDelay: '0.2s' }}>
-              <button onClick={() => user ? onNavigate('Credential') : openAuth('register')} className="min-w-[280px] cursor-pointer items-center justify-center rounded-xl h-14 px-8 bg-primary hover:bg-primary-dark text-white text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-105 active:scale-95">
-                {user ? (language === 'en' ? 'My Profile' : 'Mi Perfil') : t.startJourney}
+              <button onClick={() => onNavigate('Packs')} className="min-w-[280px] cursor-pointer items-center justify-center rounded-xl h-14 px-8 bg-primary hover:bg-primary-dark text-white text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-105 active:scale-95">
+                {t.plan}
               </button>
             </div>
           </div>
@@ -485,7 +551,7 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
           <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight animate-fade-in">{t.ctaTitle}</h2>
           <p className="text-gray-400 text-xl max-w-xl mx-auto opacity-80">{t.ctaSub}</p>
           <div className="flex justify-center mt-4">
-            <button onClick={() => openAuth('register')} className="h-14 px-12 bg-primary hover:bg-primary-dark text-white font-black rounded-xl shadow-2xl shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+            <button onClick={() => onNavigate('Packs')} className="h-14 px-12 bg-primary hover:bg-primary-dark text-white font-black rounded-xl shadow-2xl shadow-primary/20 transition-all hover:scale-105 active:scale-95">
               {t.plan}
             </button>
           </div>
@@ -521,11 +587,12 @@ const LandingPage = ({ onNavigate, language, toggleLanguage, openAuth, user, onS
           <div className="flex flex-col gap-4">
             <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">Connect</h4>
             <div className="flex gap-4">
-              {['public', 'share', 'mail'].map(icon => (
-                <a key={icon} href="#" className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-primary hover:text-white transition-all transform hover:-translate-y-1">
-                  <span className="material-symbols-outlined !text-xl">{icon}</span>
-                </a>
-              ))}
+              <a href="#" className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-primary hover:text-white transition-all transform hover:-translate-y-1">
+                <span className="material-symbols-outlined !text-xl">public</span>
+              </a>
+              <button onClick={() => onNavigate('Contact')} className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-primary hover:text-white transition-all transform hover:-translate-y-1">
+                <span className="material-symbols-outlined !text-xl">mail</span>
+              </button>
             </div>
           </div>
         </div>

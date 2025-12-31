@@ -18,6 +18,11 @@ interface Props {
   toggleLanguage: () => void;
   user?: any;
   onSignOut?: () => void;
+  notifications: any[];
+  unreadCount: number;
+  showNotifications: boolean;
+  setShowNotifications: (show: boolean) => void;
+  markAllAsRead: () => void;
 }
 
 const INITIAL_PILGRIMS: Pilgrim[] = [
@@ -29,7 +34,10 @@ const INITIAL_PILGRIMS: Pilgrim[] = [
   { id: '6', name: 'Yuki Tanaka', avatar: 'https://i.pravatar.cc/150?u=yuki', way: 'Camino Francés', stage: 'Sarria', nationality: '🇯🇵', isFollowing: false, status: 'resting' },
 ];
 
-const Community = ({ onNavigate, language }: Props) => {
+const Community = ({
+  onNavigate, language, user, notifications, unreadCount,
+  showNotifications, setShowNotifications, markAllAsRead, onSignOut
+}: Props) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pilgrims, setPilgrims] = useState<Pilgrim[]>(INITIAL_PILGRIMS);
   const [activeTab, setActiveTab] = useState<'all' | 'friends' | 'nearby'>('all');
@@ -84,7 +92,63 @@ const Community = ({ onNavigate, language }: Props) => {
             <button className="text-sm font-black text-primary border-b-2 border-primary pb-0.5">{t.title}</button>
           </nav>
           <div className="flex items-center gap-4">
-            <div className="size-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm cursor-pointer" onClick={() => onNavigate('Credential')}>MP</div>
+            {user && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowNotifications(!showNotifications);
+                    if (!showNotifications) markAllAsRead();
+                  }}
+                  className="relative p-2 text-slate-400 hover:text-primary transition-colors"
+                >
+                  <span className="material-symbols-outlined text-2xl">notifications</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 size-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-surface-dark">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+                      <h4 className="font-black text-xs uppercase tracking-widest text-slate-400">
+                        {language === 'en' ? 'Notifications' : 'Notificaciones'}
+                      </h4>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.length > 0 ? (
+                        notifications.map((n) => (
+                          <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => { onNavigate('Credential', n.actor_id); setShowNotifications(false); }}>
+                            <img
+                              src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
+                              className="size-10 rounded-xl object-cover"
+                              alt=""
+                            />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
+                                <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {language === 'en' ? 'started following you' : 'empezó a seguirte'}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-12 text-center text-slate-400 italic text-sm">
+                          {language === 'en' ? 'No new notifications' : 'No hay notificaciones'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div
+              className="size-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm cursor-pointer hover:bg-primary/30 transition-colors"
+              onClick={() => onNavigate('Credential')}
+            >
+              {user?.user_metadata?.full_name?.[0] || 'MP'}
+            </div>
           </div>
         </div>
       </header>

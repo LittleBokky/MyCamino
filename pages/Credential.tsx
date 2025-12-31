@@ -9,9 +9,17 @@ interface Props {
     user: any;
     onSignOut: () => void;
     selectedProfileId: string | null;
+    notifications: any[];
+    unreadCount: number;
+    showNotifications: boolean;
+    setShowNotifications: (show: boolean) => void;
+    markAllAsRead: () => void;
 }
 
-const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, selectedProfileId }: Props) => {
+const Credential = ({
+    onNavigate, user, onSignOut, language, toggleLanguage, selectedProfileId,
+    notifications, unreadCount, showNotifications, setShowNotifications, markAllAsRead
+}: Props) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [profile, setProfile] = useState<any>(null);
     const [counts, setCounts] = useState({ followers: 0, following: 0, friends: 0 });
@@ -21,8 +29,6 @@ const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, sel
     const [listLoading, setListLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
-    const [notifications, setNotifications] = useState<any[]>([]);
-    const [showNotifications, setShowNotifications] = useState(false);
 
     // If selectedProfileId exists, we are viewing that specific user. Otherwise, we view the logged-in user.
     const targetUserId = selectedProfileId || user?.id;
@@ -82,16 +88,7 @@ const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, sel
                 setIsFollowing(!!followCheck);
             }
 
-            // 5. Fetch Notifications if own profile
-            if (isOwnProfile && user) {
-                const { data: notifs } = await supabase
-                    .from('notifications')
-                    .select('*, actor:profiles!notifications_actor_id_fkey(*)')
-                    .eq('user_id', user.id)
-                    .order('created_at', { ascending: false })
-                    .limit(10);
-                if (notifs) setNotifications(notifs);
-            }
+            // 5. Fetch Notifications removed - handled by App.tsx
 
             setLoading(false);
         };
@@ -101,27 +98,7 @@ const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, sel
         setActiveList(null);
     }, [targetUserId, user]);
 
-    // Real-time notifications listener
-    useEffect(() => {
-        if (!user || !isOwnProfile) return;
-
-        const channel = supabase
-            .channel('notifications')
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'notifications',
-                filter: `user_id=eq.${user.id}`
-            }, async (payload) => {
-                const { data: actor } = await supabase.from('profiles').select('*').eq('id', payload.new.actor_id).single();
-                setNotifications(prev => [{ ...payload.new, actor }, ...prev].slice(0, 10));
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user, isOwnProfile]);
+    // Real-time notifications listener removed - handled by App.tsx
 
     const handleFollow = async () => {
         if (!user || isOwnProfile) return;
@@ -244,14 +221,7 @@ const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, sel
         }
     };
 
-    const markAllAsRead = async () => {
-        if (!user) return;
-        await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('user_id', user.id);
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    };
+    // markAllAsRead removed - handled by App.tsx
 
     const metrics = {
         following: counts.following,
@@ -259,7 +229,7 @@ const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, sel
         friends: counts.friends
     };
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    // unreadCount removed - handled by App.tsx
 
     const t = {
         followers: language === 'en' ? 'Followers' : 'Seguidores',
@@ -418,8 +388,8 @@ const Credential = ({ onNavigate, user, onSignOut, language, toggleLanguage, sel
                             <button
                                 onClick={handleFollow}
                                 className={`px-8 py-2.5 font-bold rounded-2xl shadow-lg transition-all active:scale-95 flex items-center gap-2 ${isFollowing
-                                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-red-50 hover:text-red-500'
-                                        : 'bg-primary text-white shadow-primary/20 hover:bg-primary-dark'
+                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-red-50 hover:text-red-500'
+                                    : 'bg-primary text-white shadow-primary/20 hover:bg-primary-dark'
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-[20px]">

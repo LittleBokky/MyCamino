@@ -8,10 +8,12 @@ import ProfessionalDashboard from './pages/ProfessionalDashboard';
 import BusinessProfile from './pages/BusinessProfile';
 import Workshop from './pages/Workshop';
 import Community from './pages/Community';
+import Packs from './pages/Packs';
+import Contact from './pages/Contact';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
-export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community';
+export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community' | 'Packs' | 'Contact' | 'Pro Dashboard' | 'Biz Profile' | 'Workshop' | 'Stage Details';
 export type Language = 'en' | 'es';
 export type AuthMode = 'login' | 'register';
 
@@ -25,11 +27,16 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [country, setCountry] = useState('ES');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -44,6 +51,51 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session?.user) {
+      setNotifications([]);
+      return;
+    }
+
+    const fetchNotifications = async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*, actor:profiles!notifications_actor_id_fkey(*)')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (data) setNotifications(data);
+    };
+
+    fetchNotifications();
+
+    const channel = supabase
+      .channel('global-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${session.user.id}`
+      }, async (payload) => {
+        const { data: actor } = await supabase.from('profiles').select('*').eq('id', payload.new.actor_id).single();
+        setNotifications(prev => [{ ...payload.new, actor }, ...prev].slice(0, 10));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
+  const markAllAsRead = async () => {
+    if (!session?.user) return;
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', session.user.id);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
 
   const handleNavigate = (view: ViewName, profileId: string | null = null) => {
     if (view === currentView && profileId === selectedProfileId) return;
@@ -92,6 +144,9 @@ export default function App() {
           options: {
             data: {
               full_name: fullName,
+              username: username.startsWith('@') ? username : `@${username}`,
+              birth_date: birthDate,
+              country: country,
             },
           },
         });
@@ -120,6 +175,11 @@ export default function App() {
     user: session?.user ?? null,
     onSignOut: handleSignOut,
     selectedProfileId: selectedProfileId,
+    notifications,
+    unreadCount: notifications.filter(n => !n.read).length,
+    showNotifications,
+    setShowNotifications,
+    markAllAsRead,
   };
 
   const renderView = () => {
@@ -128,6 +188,12 @@ export default function App() {
       case 'Credential': return <Credential {...pageProps} />;
       case 'Planner': return <RoutePlanner {...pageProps} />;
       case 'Community': return <Community {...pageProps} />;
+      case 'Packs': return <Packs {...pageProps} />;
+      case 'Contact': return <Contact {...pageProps} />;
+      case 'Pro Dashboard': return <ProfessionalDashboard {...pageProps} />;
+      case 'Biz Profile': return <BusinessProfile {...pageProps} />;
+      case 'Workshop': return <Workshop {...pageProps} />;
+      case 'Stage Details': return <StageDetails {...pageProps} />;
       default: return <LandingPage {...pageProps} />;
     }
   };
@@ -172,19 +238,82 @@ export default function App() {
                 )}
 
                 {authMode === 'register' && (
-                  <div className="animate-fade-in">
-                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 uppercase">
-                      {language === 'en' ? 'Full Name' : 'Nombre Completo'}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary focus:border-primary transition-shadow"
-                      placeholder="Juan Peregrino"
-                    />
-                  </div>
+                  <>
+                    <div className="animate-fade-in">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 uppercase">
+                        {language === 'en' ? 'Full Name' : 'Nombre Completo'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary focus:border-primary transition-shadow"
+                        placeholder="Juan Peregrino"
+                      />
+                    </div>
+
+                    <div className="animate-fade-in" style={{ animationDelay: '0.05s' }}>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 uppercase">
+                        {language === 'en' ? 'Username' : 'Nombre de Usuario'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          value={username}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setUsername(val.startsWith('@') ? val : `@${val}`);
+                          }}
+                          className="w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary focus:border-primary transition-shadow pl-3"
+                          placeholder="@peregrino_feliz"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 uppercase">
+                          {language === 'en' ? 'Birth Date' : 'Fecha Nacimiento'}
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={birthDate}
+                          onChange={(e) => setBirthDate(e.target.value)}
+                          className="w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary focus:border-primary transition-shadow"
+                        />
+                      </div>
+                      <div className="animate-fade-in" style={{ animationDelay: '0.15s' }}>
+                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 uppercase">
+                          {language === 'en' ? 'Country' : 'País'}
+                        </label>
+                        <select
+                          value={country}
+                          onChange={(e) => setCountry(e.target.value)}
+                          className="w-full rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary focus:border-primary transition-shadow"
+                        >
+                          <option value="ES">España</option>
+                          <option value="PT">Portugal</option>
+                          <option value="FR">Francia</option>
+                          <option value="IT">Italia</option>
+                          <option value="DE">Alemania</option>
+                          <option value="GB">Reino Unido</option>
+                          <option value="US">USA</option>
+                          <option value="MX">México</option>
+                          <option value="AR">Argentina</option>
+                          <option value="CO">Colombia</option>
+                          <option value="CL">Chile</option>
+                          <option value="BR">Brasil</option>
+                          <option value="CA">Canadá</option>
+                          <option value="AU">Australia</option>
+                          <option value="JP">Japón</option>
+                          <option value="OTHER">Otro / Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
                 )}
                 <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 uppercase">Email</label>
