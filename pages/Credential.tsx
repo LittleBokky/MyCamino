@@ -858,7 +858,11 @@ const Credential = ({
         following: counts.following,
         followers: counts.followers,
         friends: counts.friends,
-        posts: savedRoutes.length
+        posts: savedRoutes.length,
+        kilometers: savedRoutes.reduce((acc, route) => {
+            const km = parseFloat(route.distance_km);
+            return acc + (isNaN(km) ? 0 : km);
+        }, 0).toFixed(1)
     };
 
     const t = {
@@ -1190,6 +1194,10 @@ const Credential = ({
                                 <span className="font-bold text-slate-900 dark:text-white">{metrics.following}</span>
                                 <span className="text-slate-500 text-sm">{t.following}</span>
                             </button>
+                            <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2">
+                                <span className="font-bold text-primary">{metrics.kilometers}</span>
+                                <span className="text-slate-500 text-sm">km</span>
+                            </div>
                         </div>
 
                         {/* Bio Section */}

@@ -449,6 +449,7 @@ interface Pilgrim {
   isFollowing: boolean;
   isMutual?: boolean;
   status: 'online' | 'walking' | 'resting';
+  totalKm?: string;
 }
 
 interface Props {
@@ -542,6 +543,10 @@ const PilgrimCard = ({ pilgrim, onNavigate, onFollow, language }: {
         <div className="flex items-center gap-1 mt-1 text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-tight">
           <span className="material-symbols-outlined text-[11px] md:text-[12px]">map</span>
           <span className="truncate">{pilgrim.way}</span>
+        </div>
+        <div className="flex items-center gap-1 mt-1 text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-300">
+          <span className="material-symbols-outlined text-[12px] md:text-[14px]">speed</span>
+          <span>{pilgrim.totalKm || '0'} km</span>
         </div>
       </div>
 
@@ -656,6 +661,21 @@ const Community = ({
       setFollowingIds(followingSet);
       setMutualIds(mutualSet);
 
+      // Fetch distances for all pilgrims in profilesData
+      const profileIds = profilesData?.map(p => p.id) || [];
+      const { data: allDistances } = await supabase
+        .from('user_routes')
+        .select('user_id, distance_km')
+        .in('user_id', profileIds);
+
+      const kmMap = new Map<string, number>();
+      allDistances?.forEach(r => {
+        const km = parseFloat(r.distance_km);
+        if (!isNaN(km)) {
+          kmMap.set(r.user_id, (kmMap.get(r.user_id) || 0) + km);
+        }
+      });
+
       if (profilesData) {
         const formatted: Pilgrim[] = profilesData.map(p => ({
           id: p.id,
@@ -667,7 +687,8 @@ const Community = ({
           nationality: p.country === 'ES' ? '🇪🇸' : p.country === 'PT' ? '🇵🇹' : p.country === 'FR' ? '🇫🇷' : p.country === 'IT' ? '🇮🇹' : p.country === 'DE' ? '🇩🇪' : p.country === 'GB' ? '🇬🇧' : p.country === 'US' ? '🇺🇸' : '🏳️',
           isFollowing: followingSet.has(p.id),
           isMutual: mutualSet.has(p.id),
-          status: 'online'
+          status: 'online',
+          totalKm: (kmMap.get(p.id) || 0).toFixed(1)
         }));
         setPilgrims(formatted);
       }
