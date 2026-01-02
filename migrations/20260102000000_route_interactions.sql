@@ -77,7 +77,7 @@ begin
 
   -- Solo crear notificación si el que da like no es el dueño de la ruta
   if route_owner_id != NEW.user_id then
-    insert into notifications (user_id, type, message, route_id, from_user_id)
+    insert into notifications (user_id, type, message, route_id, actor_id)
     values (
       route_owner_id,
       'like',
@@ -112,7 +112,7 @@ begin
 
   -- Solo crear notificación si el que comenta no es el dueño de la ruta
   if route_owner_id != NEW.user_id then
-    insert into notifications (user_id, type, message, route_id, from_user_id, comment_id)
+    insert into notifications (user_id, type, message, route_id, actor_id, comment_id)
     values (
       route_owner_id,
       'comment',

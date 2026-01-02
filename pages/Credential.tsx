@@ -262,7 +262,7 @@ const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route:
                     .select('id')
                     .eq('route_id', route.id)
                     .eq('user_id', user.id)
-                    .single();
+                    .maybeSingle();
                 setIsLiked(!!userLike);
             }
 

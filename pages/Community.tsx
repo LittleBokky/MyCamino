@@ -92,7 +92,7 @@ const FeedRouteCard = memo(({ route, onNavigate, user }: { route: any, onNavigat
           .select('id')
           .eq('route_id', route.id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         setIsLiked(!!userLike);
       }
 
