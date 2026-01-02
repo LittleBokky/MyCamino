@@ -569,7 +569,7 @@ const Credential = ({
     const [profile, setProfile] = useState<any>(null);
     const [counts, setCounts] = useState({ followers: 0, following: 0, friends: 0 });
     const [loading, setLoading] = useState(true);
-    const [activeList, setActiveList] = useState<'following' | 'followers' | 'friends' | null>(null);
+    const [activeList, setActiveList] = useState<'following' | 'followers' | 'friends' | 'mutual' | null>(null);
     const [listData, setListData] = useState<any[]>([]);
     const [listLoading, setListLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -582,6 +582,7 @@ const Credential = ({
     const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'friends'>('posts');
     const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
     const [selectedFullImage, setSelectedFullImage] = useState<string | null>(null);
+    const [mutualFriends, setMutualFriends] = useState<{ name: string, avatar: string, total: number } | null>(null);
 
 
     useEffect(() => {
@@ -638,13 +639,56 @@ const Credential = ({
             setIsFollowing(followCheck && followCheck.length > 0);
         }
 
-        // 4. Fetch Saved Routes
         const { data: routes } = await supabase
             .from('user_routes')
             .select('*')
             .eq('user_id', targetUserId)
             .order('created_at', { ascending: false });
         setSavedRoutes(routes || []);
+
+        // 5. Fetch Mutual Connections
+        if (user && !isOwnProfile) {
+            const { data: myFollowing } = await supabase
+                .from('follows')
+                .select('following_id')
+                .eq('follower_id', user.id);
+
+            if (myFollowing && myFollowing.length > 0) {
+                const myFollowingIds = myFollowing.map(f => f.following_id);
+                const { data: mutuals } = await supabase
+                    .from('follows')
+                    .select('follower_id')
+                    .eq('following_id', targetUserId)
+                    .in('follower_id', myFollowingIds)
+                    .limit(1);
+
+                if (mutuals && mutuals.length > 0) {
+                    const { data: friendProfile } = await supabase
+                        .from('profiles')
+                        .select('full_name, avatar_url')
+                        .eq('id', mutuals[0].follower_id)
+                        .single();
+
+                    const { count: totalMutuals } = await supabase
+                        .from('follows')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('following_id', targetUserId)
+                        .in('follower_id', myFollowingIds);
+
+                    setMutualFriends({
+                        name: friendProfile?.full_name?.split(' ')[0] || 'Peregrino',
+                        avatar: friendProfile?.avatar_url || '',
+                        total: totalMutuals || 0
+                    });
+                } else {
+                    setMutualFriends(null);
+                }
+            } else {
+                setMutualFriends(null);
+            }
+        } else {
+            setMutualFriends(null);
+        }
 
         setLoading(false);
     };
@@ -754,7 +798,7 @@ const Credential = ({
         }
     };
 
-    const fetchList = async (type: 'following' | 'followers' | 'friends') => {
+    const fetchList = async (type: 'following' | 'followers' | 'friends' | 'mutual') => {
         if (!targetUserId) return;
         setListLoading(true);
         setActiveList(type);
@@ -780,6 +824,13 @@ const Credential = ({
                 const followingIds = following?.map(f => f.following_id) || [];
                 const followerIds = followers?.map(f => f.follower_id) || [];
                 ids = followingIds.filter(id => followerIds.includes(id));
+            } else if (type === 'mutual') {
+                if (!user) return;
+                const { data: myFollowing } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
+                const { data: pilgrimFollowers } = await supabase.from('follows').select('follower_id').eq('following_id', targetUserId);
+                const myFollowingIds = myFollowing?.map(f => f.following_id) || [];
+                const targetFollowerIds = pilgrimFollowers?.map(f => f.follower_id) || [];
+                ids = myFollowingIds.filter(id => targetFollowerIds.includes(id));
             }
 
             if (ids.length > 0) {
@@ -1141,7 +1192,7 @@ const Credential = ({
                         </div>
                     </div>
                     {/* Info Column */}
-                    <div className="flex-1 flex flex-col gap-6 w-full text-center md:text-left">
+                    <div className="flex-1 flex flex-col items-center md:items-start gap-6 w-full text-center md:text-left">
                         <div className="flex flex-col md:flex-row items-center gap-4">
                             <h1 className="text-2xl md:text-3xl font-light text-slate-900 dark:text-white uppercase tracking-tight">{profile?.username || (isOwnProfile ? user?.user_metadata?.username : '@peregrino')}</h1>
 
@@ -1199,6 +1250,35 @@ const Credential = ({
                                 <span className="text-slate-500 text-sm">km</span>
                             </div>
                         </div>
+
+                        {/* Mutual Friends Section */}
+                        {mutualFriends && (
+                            <div
+                                onClick={() => fetchList('mutual')}
+                                className="flex items-center gap-2 mt-4 px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 w-fit cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors group/mutual mx-auto md:mx-0"
+                            >
+                                <div className="flex -space-x-2">
+                                    <div className="size-6 rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-slate-100">
+                                        {mutualFriends.avatar ? (
+                                            <img src={mutualFriends.avatar} className="w-full h-full object-cover" alt="" />
+                                        ) : (
+                                            <div className="w-full h-full bg-primary flex items-center justify-center text-[10px] text-white font-bold">
+                                                {mutualFriends.name[0]}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {mutualFriends.total > 1 && (
+                                        <div className="size-6 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                            +{mutualFriends.total - 1}
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Seguido por <span className="font-bold text-slate-900 dark:text-white">{mutualFriends.name}</span>
+                                    {mutualFriends.total > 1 ? ` y ${mutualFriends.total - 1} más` : ''}
+                                </p>
+                            </div>
+                        )}
 
                         {/* Bio Section */}
                         <div className="space-y-1">
@@ -1340,7 +1420,7 @@ const Credential = ({
                         >
                             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                                    {activeList === 'following' ? t.following : activeList === 'followers' ? t.followers : t.friends}
+                                    {activeList === 'following' ? t.following : activeList === 'followers' ? t.followers : activeList === 'friends' ? t.friends : (language === 'en' ? 'Mutual Connections' : 'Seguidores en común')}
                                 </h3>
                                 <button onClick={() => setActiveList(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
                                     <span className="material-symbols-outlined">close</span>

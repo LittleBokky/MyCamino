@@ -450,6 +450,7 @@ interface Pilgrim {
   isMutual?: boolean;
   status: 'online' | 'walking' | 'resting';
   totalKm?: string;
+  mutualFriends?: { name: string, avatar: string, total: number };
 }
 
 interface Props {
@@ -529,21 +530,43 @@ const PilgrimCard = ({ pilgrim, onNavigate, onFollow, language }: {
 
       {/* Mutual / Context */}
       <div className="mb-4 md:mb-6 flex-1 flex flex-col items-center justify-center w-full">
-        {pilgrim.isMutual ? (
-          <div className="flex items-center gap-1 px-1">
-            <div className="flex -space-x-1.5 md:-space-x-2 mr-1 flex-shrink-0">
-              <div className="size-3 md:size-4 rounded-full bg-slate-200 border border-white"></div>
-              <div className="size-3 md:size-4 rounded-full bg-slate-300 border border-white"></div>
+        {pilgrim.mutualFriends && pilgrim.mutualFriends.total > 0 ? (
+          <div className="flex flex-col items-center gap-1.5 px-1 overflow-hidden w-full">
+            <div className="flex -space-x-2 mr-1 flex-shrink-0">
+              <div className="size-4 md:size-5 rounded-full border-2 border-white dark:border-surface-dark bg-slate-100 overflow-hidden">
+                {pilgrim.mutualFriends.avatar ? (
+                  <img src={pilgrim.mutualFriends.avatar} className="w-full h-full object-cover" alt="" />
+                ) : (
+                  <div className="w-full h-full bg-primary flex items-center justify-center text-[8px] text-white font-bold">
+                    {pilgrim.mutualFriends.name[0]}
+                  </div>
+                )}
+              </div>
+              {pilgrim.mutualFriends.total > 1 && (
+                <div className="size-4 md:size-5 rounded-full border-2 border-white dark:border-surface-dark bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[8px] font-bold text-slate-500">
+                  +{pilgrim.mutualFriends.total - 1}
+                </div>
+              )}
             </div>
-            <span className="text-[10px] md:text-[11px] text-slate-500 font-medium truncate">{t.mutual}</span>
+            <p className="text-[10px] md:text-[11px] text-slate-500 font-medium truncate max-w-full text-center">
+              Seguido por <span className="font-bold text-slate-700 dark:text-slate-300">{pilgrim.mutualFriends.name}</span>
+              {pilgrim.mutualFriends.total > 1 ? ` y ${pilgrim.mutualFriends.total - 1} más` : ''}
+            </p>
           </div>
-        ) : (
+        ) : pilgrim.isMutual ? (
+          <span className="text-[10px] md:text-[11px] text-slate-500 font-medium">{t.mutual}</span>
+        ) : !pilgrim.isFollowing ? (
           <span className="text-[10px] md:text-[11px] text-slate-500 font-medium">{t.suggested}</span>
+        ) : (
+          <div className="h-4" />
         )}
-        <div className="flex items-center gap-1 mt-1 text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-tight">
-          <span className="material-symbols-outlined text-[11px] md:text-[12px]">map</span>
-          <span className="truncate">{pilgrim.way}</span>
-        </div>
+
+        {pilgrim.way && pilgrim.way !== 'Camino por definir' && (
+          <div className="flex items-center gap-1 mt-1 text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-tight">
+            <span className="material-symbols-outlined text-[11px] md:text-[12px]">map</span>
+            <span className="truncate">{pilgrim.way}</span>
+          </div>
+        )}
         <div className="flex items-center gap-1 mt-1 text-[10px] md:text-[11px] font-black text-slate-700 dark:text-slate-300">
           <span className="material-symbols-outlined text-[12px] md:text-[14px]">speed</span>
           <span>{pilgrim.totalKm || '0'} km</span>
@@ -670,20 +693,56 @@ const Community = ({
         }
       });
 
+      // Calculate Mutual Friends (People I follow who follow this pilgrim)
+      const mutualMap = new Map<string, any>();
+      const profileInfoMap = new Map(profilesData?.map(p => [p.id, p]));
+
+      if (user?.id) {
+        const followList = Array.from(followingSet);
+        if (followList.length > 0) {
+          const { data: pilgrimFollowers } = await supabase
+            .from('follows')
+            .select('following_id, follower_id')
+            .in('following_id', profileIds)
+            .in('follower_id', followList);
+
+          pilgrimFollowers?.forEach(f => {
+            const current = mutualMap.get(f.following_id) || { total: 0, friends: [] };
+            current.total += 1;
+            if (current.friends.length < 1) {
+              const friendProfile = profileInfoMap.get(f.follower_id);
+              current.friends.push({
+                name: friendProfile?.full_name?.split(' ')[0] || 'Peregrino',
+                avatar: friendProfile?.avatar_url
+              });
+            }
+            mutualMap.set(f.following_id, current);
+          });
+        }
+      }
+
       if (profilesData) {
-        const formatted: Pilgrim[] = profilesData.map(p => ({
-          id: p.id,
-          name: p.full_name || p.username || 'Peregrino',
-          username: p.username || 'peregrino',
-          avatar: p.avatar_url,
-          way: p.way || 'Camino por definir',
-          stage: p.country ? `Desde ${p.country}` : 'En ruta',
-          nationality: p.country === 'ES' ? '🇪🇸' : p.country === 'PT' ? '🇵🇹' : p.country === 'FR' ? '🇫🇷' : p.country === 'IT' ? '🇮🇹' : p.country === 'DE' ? '🇩🇪' : p.country === 'GB' ? '🇬🇧' : p.country === 'US' ? '🇺🇸' : '🏳️',
-          isFollowing: followingSet.has(p.id),
-          isMutual: mutualSet.has(p.id),
-          status: 'online',
-          totalKm: (kmMap.get(p.id) || 0).toFixed(1)
-        }));
+        const formatted: Pilgrim[] = profilesData.map(p => {
+          const mutual = mutualMap.get(p.id);
+          return {
+            id: p.id,
+            name: p.full_name || p.username || 'Peregrino',
+            username: p.username || 'peregrino',
+            avatar: p.avatar_url,
+            way: p.way,
+            stage: p.country ? `Desde ${p.country}` : 'En ruta',
+            nationality: p.country === 'ES' ? '🇪🇸' : p.country === 'PT' ? '🇵🇹' : p.country === 'FR' ? '🇫🇷' : p.country === 'IT' ? '🇮🇹' : p.country === 'DE' ? '🇩🇪' : p.country === 'GB' ? '🇬🇧' : p.country === 'US' ? '🇺🇸' : '🏳️',
+            isFollowing: followingSet.has(p.id),
+            isMutual: mutualSet.has(p.id),
+            status: 'online',
+            totalKm: (kmMap.get(p.id) || 0).toFixed(1),
+            mutualFriends: mutual ? {
+              name: mutual.friends[0].name,
+              avatar: mutual.friends[0].avatar,
+              total: mutual.total
+            } : undefined
+          };
+        });
         setPilgrims(formatted);
       }
 
