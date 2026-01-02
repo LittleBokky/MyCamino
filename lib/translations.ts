@@ -637,6 +637,54 @@ export const translations = {
         zh: '成就',
         ja: '実績',
     },
+    sentMessage: {
+        en: 'sent you a message',
+        es: 'te envió un mensaje',
+    },
+    voicesTitle: {
+        en: 'Voices of the Way',
+        es: 'Voces del Camino',
+    },
+    voicesSub: {
+        en: 'Connected by a millenary tradition.',
+        es: 'Conectados por una tradición milenaria.',
+    },
+    story: {
+        en: 'Story',
+        es: 'Historia',
+    },
+    pro: {
+        en: 'Pro',
+        es: 'Pro',
+    },
+    event: {
+        en: 'Event',
+        es: 'Evento',
+    },
+    storyTitle: {
+        en: 'The First Step',
+        es: 'El Primer Paso',
+    },
+    proTitle: {
+        en: 'Expert Advice',
+        es: 'Consejo Experto',
+    },
+    eventTitle: {
+        en: 'Pilgrim Meetup',
+        es: 'Encuentro Peregrino',
+    },
+    voicesDesc: {
+        en: 'Share your journey with others.',
+        es: 'Comparte tu viaje con otros.',
+    },
+    ctaTitle: {
+        en: 'Ready for your Camino?',
+        es: '¿Listo para tu Camino?',
+    },
+    ctaSub: {
+        en: 'Join thousands of pilgrims online.',
+        es: 'Únete a miles de peregrinos online.',
+    },
 };
 
 export function t(key: keyof typeof translations, lang: Language): string {

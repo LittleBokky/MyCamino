@@ -565,7 +565,8 @@ const RoutePlanner = ({
                             />
                             <div className="flex-1 whitespace-normal">
                               <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
-                                <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {language === 'en' ? 'started following you' : 'empezó a seguirte'}
+                                <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span>{' '}
+                                {n.message || (n.type === 'follow' ? (language === 'en' ? 'started following you' : 'empezó a seguirte') : (language === 'en' ? 'sent you a message' : 'te envió un mensaje'))}
                               </p>
                               <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
                             </div>
