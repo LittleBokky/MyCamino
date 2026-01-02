@@ -574,7 +574,8 @@ const Community = ({
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
   const [feed, setFeed] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'feed' | 'all' | 'friends' | 'nearby'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'all' | 'friends' | 'nearby' | 'rankings'>('feed');
+  const [rankingTab, setRankingTab] = useState<'friends' | 'world'>('world');
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -623,15 +624,8 @@ const Community = ({
 
   const fetchData = async () => {
     try {
-      // 1. Fetch all profiles
-      let query = supabase.from('profiles').select('*');
-
-      // If logged in, exclude self
-      if (user?.id) {
-        query = query.neq('id', user.id);
-      }
-
-      const { data: profilesData } = await query;
+      // 1. Fetch all profiles (including self for rankings)
+      const { data: profilesData } = await supabase.from('profiles').select('*');
 
       // 2. Fetch people I follow
       let followingSet = new Set<string>();
@@ -768,7 +762,9 @@ const Community = ({
     empty: language === 'en' ? 'No pilgrims found.' : 'No se encontraron peregrinos.',
     loading: language === 'en' ? 'Updating community...' : 'Actualizando comunidad...',
     login: language === 'en' ? 'Login' : 'Iniciar Sesión',
-    feed: language === 'en' ? 'Feed' : 'Explorar Rutas',
+    feed: language === 'en' ? 'Routes' : 'Rutas',
+    rankings: language === 'en' ? 'Rank' : 'Ranking',
+    world: language === 'en' ? 'World' : 'Mundial',
   };
 
   const handleFollow = async (targetId: string) => {
@@ -809,9 +805,10 @@ const Community = ({
 
   const filteredPilgrims = useMemo(() => {
     let list = pilgrims.filter(p =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.way.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.stage.toLowerCase().includes(searchQuery.toLowerCase())
+      (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.way.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.stage.toLowerCase().includes(searchQuery.toLowerCase()))
+      && p.id !== user?.id // Exclude self from discovery tabs
     );
 
     if (activeTab === 'friends') {
@@ -1020,31 +1017,42 @@ const Community = ({
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center justify-center gap-2 mb-8 border-b border-slate-200 dark:border-slate-800">
+        {/* Tabs - Optimized for Mobile (No scroll) */}
+        <div className="flex items-end justify-between w-full mb-8 border-b border-slate-200 dark:border-slate-800">
           <button
             onClick={() => setActiveTab('feed')}
-            className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'feed' ? 'text-primary border-primary' : 'text-slate-500 border-transparent hover:text-slate-700'}`}
+            className={`flex-1 flex flex-col items-center gap-1 pb-3 text-[10px] md:text-sm font-bold transition-all border-b-2 ${activeTab === 'feed' ? 'text-primary border-primary' : 'text-slate-400 border-transparent'}`}
           >
-            {t.feed}
+            <span className={`material-symbols-outlined text-xl md:hidden ${activeTab === 'feed' ? 'filled' : ''}`}>explore</span>
+            <span>{t.feed}</span>
           </button>
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'all' ? 'text-primary border-primary' : 'text-slate-500 border-transparent hover:text-slate-700'}`}
+            className={`flex-1 flex flex-col items-center gap-1 pb-3 text-[10px] md:text-sm font-bold transition-all border-b-2 ${activeTab === 'all' ? 'text-primary border-primary' : 'text-slate-400 border-transparent'}`}
           >
-            {t.all}
+            <span className={`material-symbols-outlined text-xl md:hidden ${activeTab === 'all' ? 'filled' : ''}`}>search_check</span>
+            <span>{t.all}</span>
           </button>
           <button
             onClick={() => setActiveTab('friends')}
-            className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'friends' ? 'text-primary border-primary' : 'text-slate-500 border-transparent hover:text-slate-700'}`}
+            className={`flex-1 flex flex-col items-center gap-1 pb-3 text-[10px] md:text-sm font-bold transition-all border-b-2 ${activeTab === 'friends' ? 'text-primary border-primary' : 'text-slate-400 border-transparent'}`}
           >
-            {t.friends}
+            <span className={`material-symbols-outlined text-xl md:hidden ${activeTab === 'friends' ? 'filled' : ''}`}>group</span>
+            <span>{t.friends}</span>
           </button>
           <button
             onClick={() => setActiveTab('nearby')}
-            className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'nearby' ? 'text-primary border-primary' : 'text-slate-500 border-transparent hover:text-slate-700'}`}
+            className={`flex-1 flex flex-col items-center gap-1 pb-3 text-[10px] md:text-sm font-bold transition-all border-b-2 ${activeTab === 'nearby' ? 'text-primary border-primary' : 'text-slate-400 border-transparent'}`}
           >
-            {t.nearby}
+            <span className={`material-symbols-outlined text-xl md:hidden ${activeTab === 'nearby' ? 'filled' : ''}`}>near_me</span>
+            <span>{t.nearby}</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('rankings')}
+            className={`flex-1 flex flex-col items-center gap-1 pb-3 text-[10px] md:text-sm font-bold transition-all border-b-2 ${activeTab === 'rankings' ? 'text-primary border-primary' : 'text-slate-400 border-transparent'}`}
+          >
+            <span className={`material-symbols-outlined text-xl md:hidden ${activeTab === 'rankings' ? 'filled' : ''}`}>leaderboard</span>
+            <span>{t.rankings}</span>
           </button>
         </div>
 
@@ -1063,6 +1071,108 @@ const Community = ({
               </div>
             )}
           </div>
+        ) : activeTab === 'rankings' ? (
+          <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Sub-tabs for Ranking */}
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl mb-8 w-full max-w-sm mx-auto">
+              <button
+                onClick={() => setRankingTab('world')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rankingTab === 'world' ? 'bg-white dark:bg-slate-700 text-primary shadow-lg shadow-primary/10' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {t.world}
+              </button>
+              <button
+                onClick={() => setRankingTab('friends')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rankingTab === 'friends' ? 'bg-white dark:bg-slate-700 text-primary shadow-lg shadow-primary/10' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {t.friends}
+              </button>
+            </div>
+
+            {/* Ranking List */}
+            <div className="space-y-3">
+              {(rankingTab === 'friends'
+                ? pilgrims.filter(p => p.isFollowing || p.id === user?.id)
+                : pilgrims
+              )
+                .sort((a, b) => parseFloat(b.totalKm || '0') - parseFloat(a.totalKm || '0'))
+                .map((p, index) => (
+                  <div
+                    key={p.id}
+                    className={`group flex items-center gap-4 p-4 rounded-2xl border transition-all hover:translate-x-1 cursor-pointer overflow-hidden relative ${p.id === user?.id ? 'bg-primary/5 border-primary/20 shadow-sm shadow-primary/5 ring-1 ring-primary/10' : 'bg-white dark:bg-surface-dark border-slate-100 dark:border-slate-800'}`}
+                    onClick={() => onNavigate('Credential', p.id)}
+                  >
+                    {/* Position Indicator */}
+                    <div className="flex-none flex items-center justify-center size-10 rounded-xl font-black text-lg">
+                      {index === 0 ? (
+                        <div className="flex flex-col items-center">
+                          <span className="material-symbols-outlined text-yellow-500 text-4xl filled">workspace_premium</span>
+                        </div>
+                      ) : index === 1 ? (
+                        <div className="flex flex-col items-center">
+                          <span className="material-symbols-outlined text-slate-400 text-4xl filled">workspace_premium</span>
+                        </div>
+                      ) : index === 2 ? (
+                        <div className="flex flex-col items-center">
+                          <span className="material-symbols-outlined text-amber-600 text-4xl filled">workspace_premium</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-600 italic">#{index + 1}</span>
+                      )}
+                    </div>
+
+                    {/* Avatar */}
+                    <div className="flex-none relative h-14 w-14 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-100 dark:ring-slate-700">
+                      {p.avatar ? (
+                        <img src={p.avatar} className="h-full w-full object-cover transition-transform group-hover:scale-110" alt="" />
+                      ) : (
+                        <div className="h-full w-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-xl font-black">
+                          {p.name[0]}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900 dark:text-white truncate group-hover:text-primary transition-colors">{p.name}</h4>
+                        {p.id === user?.id && (
+                          <span className="text-[9px] bg-primary text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter shadow-sm shadow-primary/50">Tú</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="truncate max-w-[100px]">@{p.username}</span>
+                        <span className="size-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+                        <span className="truncate">{p.way}</span>
+                      </div>
+                    </div>
+
+                    {/* Kilometers */}
+                    <div className="flex-none text-right pr-2">
+                      <div className={`text-xl font-black leading-none ${index < 3 ? 'text-primary' : 'text-slate-700 dark:text-white'}`}>
+                        {p.totalKm}
+                      </div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">km</div>
+                    </div>
+
+                    {/* Subtle index for non-top 3 */}
+                    {index >= 3 && (
+                      <div className="absolute top-0 right-0 p-1 opacity-5">
+                        <span className="text-4xl font-black italic">{index + 1}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+              {(rankingTab === 'friends' && pilgrims.filter(p => (p.isFollowing || p.id === user?.id) && parseFloat(p.totalKm || '0') > 0).length === 0) && (
+                <div className="p-20 text-center bg-slate-50 dark:bg-surface-dark rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                  <span className="material-symbols-outlined text-6xl text-slate-200 mb-4 font-light">leaderboard</span>
+                  <p className="text-slate-400 font-bold italic">Aún no hay amigos con kilómetros registrados.</p>
+                  <p className="text-slate-300 text-xs mt-2">¡Anima a tus amigos a registrar sus rutas!</p>
+                </div>
+              )}
+            </div>
+          </div>
         ) : filteredPilgrims.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-8">
             {filteredPilgrims.map((pilgrim) => (
@@ -1080,9 +1190,10 @@ const Community = ({
             <span className="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">person_search</span>
             <p className="text-slate-500 dark:text-slate-400 font-bold">{t.empty}</p>
           </div>
-        )}
-      </main>
-    </div>
+        )
+        }
+      </main >
+    </div >
   );
 };
 
