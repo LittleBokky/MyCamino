@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { t as trans } from '../lib/translations';
 
@@ -29,6 +30,48 @@ interface Props {
 
 
 
+const ImageModal = ({ src, isOpen, onClose }: { src: string, isOpen: boolean, onClose: () => void }) => {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 md:p-12 overflow-hidden bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-500"
+      onClick={onClose}
+    >
+      <button
+        className="absolute top-6 right-6 z-10 size-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white/70 hover:text-white transition-all transform hover:rotate-90 active:scale-95 group shadow-2xl backdrop-blur-md"
+        onClick={onClose}
+      >
+        <span className="material-symbols-outlined text-2xl group-hover:scale-110">close</span>
+      </button>
+
+      <div
+        className="relative w-full max-w-4xl h-full flex items-center justify-center animate-in zoom-in-95 fade-in slide-in-from-bottom-8 duration-500 ease-out"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative group max-h-full">
+          <div className="absolute inset-x-0 inset-y-0 bg-primary/20 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+
+          <img
+            src={src}
+            className="relative block max-w-full max-h-[85vh] object-contain rounded-2xl md:rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] ring-1 ring-white/20 select-none"
+            alt="Full size view"
+          />
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 const LandingPage = ({
   onNavigate, language, setLanguage, openAuth, user, onSignOut,
   notifications, unreadCount, showNotifications, setShowNotifications, markAllAsRead
@@ -40,6 +83,7 @@ const LandingPage = ({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const languages = [
     { code: 'es', label: 'Español', flag: '🇪🇸' },
@@ -140,6 +184,17 @@ const LandingPage = ({
     startedFollowing: trans('startedFollowing', language),
     chat: trans('messages', language),
     sentMessage: language === 'en' ? 'sent you a message' : 'te envió un mensaje',
+    voicesTitle: trans('voicesTitle', language),
+    voicesSub: trans('voicesSub', language),
+    story: trans('story', language),
+    pro: trans('pro', language),
+    event: trans('event', language),
+    storyTitle: trans('storyTitle', language),
+    proTitle: trans('proTitle', language),
+    eventTitle: trans('eventTitle', language),
+    voicesDesc: trans('voicesDesc', language),
+    ctaTitle: trans('ctaTitle', language),
+    ctaSub: trans('ctaSub', language),
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -393,40 +448,73 @@ const LandingPage = ({
                     </button>
 
                     {showNotifications && (
-                      <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in text-left">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                          <h4 className="font-black text-xs uppercase tracking-widest text-slate-400">
-                            {language === 'en' ? 'Notifications' : 'Notificaciones'}
+                      <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-24px)] bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in text-left z-[100] ring-1 ring-black/5">
+                        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                          <h4 className="font-black text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                            {t.notifs}
                           </h4>
+                          {unreadCount > 0 && (
+                            <span className="text-[10px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-full">
+                              {unreadCount} {language === 'en' ? 'new' : 'nuevas'}
+                            </span>
+                          )}
                         </div>
-                        <div className="max-h-96 overflow-y-auto">
+                        <div className="max-h-[450px] overflow-y-auto custom-scrollbar">
                           {notifications.length > 0 ? (
                             notifications.map((n) => (
-                              <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => {
-                                if (n.type === 'message') {
-                                  onNavigate('Chat', n.actor_id);
-                                } else {
-                                  onNavigate('Credential', n.actor_id);
-                                }
-                                setShowNotifications(false);
-                              }}>
-                                <img
-                                  src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
-                                  className="size-10 rounded-xl object-cover"
-                                  alt=""
-                                />
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
-                                    <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span>{' '}
+                              <div
+                                key={n.id}
+                                className={`p-4 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border-b border-slate-50 dark:border-slate-800 cursor-pointer group ${!n.read ? 'bg-primary/[0.03]' : ''}`}
+                                onClick={() => {
+                                  if (n.type === 'message') {
+                                    onNavigate('Chat', n.actor_id);
+                                  } else {
+                                    onNavigate('Credential', n.actor_id);
+                                  }
+                                  setShowNotifications(false);
+                                }}
+                              >
+                                <div className="relative flex-none group/avatar cursor-pointer" onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedImage(n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`);
+                                }}>
+                                  <img
+                                    src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
+                                    className="size-11 rounded-full object-cover ring-2 ring-white dark:ring-slate-900 shadow-sm transition-transform group-hover/avatar:scale-105"
+                                    alt=""
+                                  />
+                                  <div className="absolute inset-0 bg-black/20 rounded-full opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-white text-[10px]">zoom_in</span>
+                                  </div>
+                                  <div className={`absolute -bottom-1 -right-1 size-5 rounded-full flex items-center justify-center text-white border-2 border-white dark:border-slate-900 shadow-sm
+                                    ${n.type === 'like' || n.type === 'route_like' ? 'bg-pink-500' :
+                                      n.type === 'comment' || n.type === 'route_comment' ? 'bg-blue-500' :
+                                        n.type === 'follow' ? 'bg-indigo-500' : 'bg-primary'}`}
+                                  >
+                                    <span className="material-symbols-outlined text-[12px] font-bold">
+                                      {n.type === 'like' || n.type === 'route_like' ? 'favorite' :
+                                        n.type === 'comment' || n.type === 'route_comment' ? 'chat_bubble' :
+                                          n.type === 'follow' ? 'person_add' : 'notifications'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0 text-left">
+                                  <p className="text-[13px] leading-normal text-slate-600 dark:text-gray-300 break-words line-clamp-2">
+                                    <span className="font-bold text-slate-900 dark:text-white mr-1">{n.actor?.full_name || 'Peregrino'}</span>
                                     {n.message || (n.type === 'follow' ? (language === 'en' ? 'started following you' : 'empezó a seguirte') : (language === 'en' ? 'sent you a message' : 'te envió un mensaje'))}
                                   </p>
-                                  <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                                  <div className="flex items-center gap-2 mt-1.5 text-left">
+                                    <span className="text-[10px] font-bold text-slate-400 tracking-wider">
+                                      {new Date(n.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                    </span>
+                                    {!n.read && <span className="size-1.5 rounded-full bg-primary ring-2 ring-primary/20"></span>}
+                                  </div>
                                 </div>
                               </div>
                             ))
                           ) : (
                             <div className="p-12 text-center text-slate-400 italic text-sm">
-                              {language === 'en' ? 'No new notifications' : 'No hay notificaciones'}
+                              {t.noNotifications}
                             </div>
                           )}
                         </div>
@@ -507,33 +595,67 @@ const LandingPage = ({
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in text-left z-50">
-                      <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-                        <h4 className="font-black text-xs uppercase tracking-widest text-slate-400">
+                    <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-24px)] bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in text-left z-[100] ring-1 ring-black/5">
+                      <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                        <h4 className="font-black text-[11px] uppercase tracking-[0.2em] text-slate-400">
                           {t.notifs}
                         </h4>
+                        {unreadCount > 0 && (
+                          <span className="text-[10px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-full">
+                            {unreadCount} {language === 'en' ? 'new' : 'nuevas'}
+                          </span>
+                        )}
                       </div>
-                      <div className="max-h-96 overflow-y-auto">
+                      <div className="max-h-[450px] overflow-y-auto custom-scrollbar">
                         {notifications.length > 0 ? (
                           notifications.map((n) => (
-                            <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => {
-                              if (n.type === 'message') {
-                                onNavigate('Chat', n.actor_id);
-                              } else {
-                                onNavigate('Credential', n.actor_id);
-                              }
-                              setShowNotifications(false);
-                            }}>
-                              <img
-                                src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
-                                className="size-10 rounded-xl object-cover"
-                                alt=""
-                              />
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
-                                  <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span> {n.type === 'message' ? t.sentMessage : t.startedFollowing}
+                            <div
+                              key={n.id}
+                              className={`p-4 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border-b border-slate-50 dark:border-slate-800 cursor-pointer group ${!n.read ? 'bg-primary/[0.03]' : ''}`}
+                              onClick={() => {
+                                if (n.type === 'message') {
+                                  onNavigate('Chat', n.actor_id);
+                                } else {
+                                  onNavigate('Credential', n.actor_id);
+                                }
+                                setShowNotifications(false);
+                              }}
+                            >
+                              <div className="relative flex-none group/avatar cursor-pointer" onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedImage(n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`);
+                              }}>
+                                <img
+                                  src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
+                                  className="size-11 rounded-full object-cover ring-2 ring-white dark:ring-slate-900 shadow-sm transition-transform group-hover/avatar:scale-105"
+                                  alt=""
+                                />
+                                <div className="absolute inset-0 bg-black/20 rounded-full opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                                  <span className="material-symbols-outlined text-white text-[10px]">zoom_in</span>
+                                </div>
+                                <div className={`absolute -bottom-1 -right-1 size-5 rounded-full flex items-center justify-center text-white border-2 border-white dark:border-slate-900 shadow-sm
+                                  ${n.type === 'like' || n.type === 'route_like' ? 'bg-pink-500' :
+                                    n.type === 'comment' || n.type === 'route_comment' ? 'bg-blue-500' :
+                                      n.type === 'follow' ? 'bg-indigo-500' : 'bg-primary'}`}
+                                >
+                                  <span className="material-symbols-outlined text-[12px] font-bold">
+                                    {n.type === 'like' || n.type === 'route_like' ? 'favorite' :
+                                      n.type === 'comment' || n.type === 'route_comment' ? 'chat_bubble' :
+                                        n.type === 'follow' ? 'person_add' : 'notifications'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0 text-left">
+                                <p className="text-[13px] leading-normal text-slate-600 dark:text-gray-300 break-words line-clamp-2">
+                                  <span className="font-bold text-slate-900 dark:text-white mr-1">{n.actor?.full_name || 'Peregrino'}</span>
+                                  {n.message || (n.type === 'follow' ? (language === 'en' ? 'started following you' : 'empezó a seguirte') : (language === 'en' ? 'sent you a message' : 'te envió un mensaje'))}
                                 </p>
-                                <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                                <div className="flex items-center gap-2 mt-1.5 text-left">
+                                  <span className="text-[10px] font-bold text-slate-400 tracking-wider">
+                                    {new Date(n.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                  </span>
+                                  {!n.read && <span className="size-1.5 rounded-full bg-primary ring-2 ring-primary/20"></span>}
+                                </div>
                               </div>
                             </div>
                           ))
@@ -864,6 +986,11 @@ const LandingPage = ({
           <p className="text-xs text-gray-400 font-medium">© 2024 MyCamino. Built for pilgrims, by pilgrims. Buen Camino.</p>
         </div>
       </footer>
+      <ImageModal
+        src={selectedImage || ''}
+        isOpen={!!selectedImage}
+        onClose={() => setSelectedImage(null)}
+      />
     </div>
   );
 };

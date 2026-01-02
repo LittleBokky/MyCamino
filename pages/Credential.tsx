@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -504,7 +505,6 @@ const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route:
 };
 
 interface Props {
-    // ... rest of file
     onNavigate: (view: any, profileId?: string | null, routeId?: string | null) => void;
     language: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
     setLanguage: (lang: 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja') => void;
@@ -518,6 +518,48 @@ interface Props {
     setShowNotifications: (show: boolean) => void;
     markAllAsRead: () => void;
 }
+
+const ImageModal = ({ src, isOpen, onClose }: { src: string, isOpen: boolean, onClose: () => void }) => {
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-4 md:p-12 overflow-hidden bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-500"
+            onClick={onClose}
+        >
+            <button
+                className="absolute top-6 right-6 z-10 size-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white/70 hover:text-white transition-all transform hover:rotate-90 active:scale-95 group shadow-2xl backdrop-blur-md"
+                onClick={onClose}
+            >
+                <span className="material-symbols-outlined text-2xl group-hover:scale-110">close</span>
+            </button>
+
+            <div
+                className="relative w-full max-w-4xl h-full flex items-center justify-center animate-in zoom-in-95 fade-in slide-in-from-bottom-8 duration-500 ease-out"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="relative group max-h-full">
+                    <div className="absolute inset-x-0 inset-y-0 bg-primary/20 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+
+                    <img
+                        src={src}
+                        className="relative block max-w-full max-h-[85vh] object-contain rounded-2xl md:rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] ring-1 ring-white/20 select-none"
+                        alt="Full size view"
+                    />
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 const Credential = ({
     onNavigate, user, onSignOut, language, setLanguage, selectedProfileId,
@@ -539,6 +581,7 @@ const Credential = ({
     const [savedRoutes, setSavedRoutes] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'friends'>('posts');
     const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
+    const [selectedFullImage, setSelectedFullImage] = useState<string | null>(null);
 
 
     useEffect(() => {
@@ -895,18 +938,26 @@ const Credential = ({
                                                         setShowDropdown(false);
                                                     }}
                                                 >
-                                                    {res.avatar_url ? (
-                                                        <img
-                                                            src={res.avatar_url}
-                                                            className="size-10 rounded-xl object-cover"
-                                                            alt=""
-                                                        />
-                                                    ) : (
-                                                        <div className="size-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold">
-                                                            {(res.full_name || 'P')[0]}
+                                                    <div className="relative group/avatar cursor-pointer" onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedFullImage(res.avatar_url);
+                                                    }}>
+                                                        {res.avatar_url ? (
+                                                            <img
+                                                                src={res.avatar_url}
+                                                                className="size-10 rounded-xl object-cover transition-transform group-hover/avatar:scale-105"
+                                                                alt=""
+                                                            />
+                                                        ) : (
+                                                            <div className="size-10 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-sm font-bold">
+                                                                {(res.full_name || 'P')[0]}
+                                                            </div>
+                                                        )}
+                                                        <div className="absolute inset-0 bg-black/20 rounded-xl opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <span className="material-symbols-outlined text-white text-xs">zoom_in</span>
                                                         </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
+                                                    </div>
+                                                    streams                                                    <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-bold truncate text-slate-900 dark:text-white group-hover:text-primary transition-colors">
                                                             {res.full_name || 'Peregrino'}
                                                         </p>
@@ -942,24 +993,57 @@ const Credential = ({
 
                                     {showNotifications && (
                                         <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-surface-dark rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-scale-in">
-                                            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                                                <h4 className="font-black text-xs uppercase tracking-widest text-slate-400">{t.notifs}</h4>
+                                            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                                                <h4 className="font-black text-[11px] uppercase tracking-[0.2em] text-slate-400">{t.notifs}</h4>
+                                                {unreadCount > 0 && (
+                                                    <span className="text-[10px] font-bold text-primary px-2 py-0.5 bg-primary/10 rounded-full">
+                                                        {unreadCount} {language === 'en' ? 'new' : 'nuevas'}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="max-h-96 overflow-y-auto">
+                                            <div className="max-h-[450px] overflow-y-auto custom-scrollbar">
                                                 {notifications.length > 0 ? (
                                                     notifications.map((n) => (
-                                                        <div key={n.id} className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-50 dark:border-slate-800 cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`} onClick={() => { onNavigate('Credential', n.actor_id); setShowNotifications(false); }}>
-                                                            <img
-                                                                src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
-                                                                className="size-10 rounded-xl object-cover"
-                                                                alt=""
-                                                            />
-                                                            <div className="flex-1">
-                                                                <p className="text-sm font-medium text-slate-700 dark:text-gray-200">
-                                                                    <span className="font-black">{n.actor?.full_name || 'Peregrino'}</span>{' '}
+                                                        <div
+                                                            key={n.id}
+                                                            className={`p-4 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border-b border-slate-50 dark:border-slate-800 cursor-pointer group ${!n.read ? 'bg-primary/[0.03]' : ''}`}
+                                                            onClick={() => { onNavigate('Credential', n.actor_id); setShowNotifications(false); }}
+                                                        >
+                                                            <div className="relative flex-none group/avatar cursor-pointer" onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedFullImage(n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`);
+                                                            }}>
+                                                                <img
+                                                                    src={n.actor?.avatar_url || `https://i.pravatar.cc/150?u=${n.actor_id}`}
+                                                                    className="size-11 rounded-full object-cover ring-2 ring-white dark:ring-slate-900 shadow-sm transition-transform group-hover/avatar:scale-105"
+                                                                    alt=""
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/20 rounded-full opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                                                                    <span className="material-symbols-outlined text-white text-[10px]">zoom_in</span>
+                                                                </div>
+                                                                <div className={`absolute -bottom-1 -right-1 size-5 rounded-full flex items-center justify-center text-white border-2 border-white dark:border-slate-900 shadow-sm
+                                                                    ${n.type === 'like' || n.type === 'route_like' ? 'bg-pink-500' :
+                                                                        n.type === 'comment' || n.type === 'route_comment' ? 'bg-blue-500' :
+                                                                            n.type === 'follow' ? 'bg-indigo-500' : 'bg-primary'}`}
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[12px] font-bold">
+                                                                        {n.type === 'like' || n.type === 'route_like' ? 'favorite' :
+                                                                            n.type === 'comment' || n.type === 'route_comment' ? 'chat_bubble' :
+                                                                                n.type === 'follow' ? 'person_add' : 'notifications'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-[13px] leading-normal text-slate-600 dark:text-gray-300 break-words line-clamp-2">
+                                                                    <span className="font-bold text-slate-900 dark:text-white mr-1">{n.actor?.full_name || 'Peregrino'}</span>
                                                                     {n.message || (n.type === 'follow' ? (language === 'en' ? 'started following you' : 'empezó a seguirte') : (language === 'en' ? 'sent you a message' : 'te envió un mensaje'))}
                                                                 </p>
-                                                                <p className="text-[10px] text-slate-400 mt-0.5">{new Date(n.created_at).toLocaleDateString()}</p>
+                                                                <div className="flex items-center gap-2 mt-1.5">
+                                                                    <span className="text-[10px] font-bold text-slate-400 tracking-wider">
+                                                                        {new Date(n.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                                    </span>
+                                                                    {!n.read && <span className="size-1.5 rounded-full bg-primary ring-2 ring-primary/20"></span>}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     ))
@@ -1011,21 +1095,43 @@ const Credential = ({
                                     htmlFor={isOwnProfile ? "avatar-upload-main" : undefined}
                                     className={`w-full h-full flex items-center justify-center transition-all ${isOwnProfile ? 'cursor-pointer group' : ''} relative ${uploading ? 'animate-pulse' : ''}`}
                                 >
-                                    {uploading ? (
-                                        <span className="material-symbols-outlined text-primary animate-spin text-3xl">sync</span>
-                                    ) : profile?.avatar_url ? (
-                                        <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-4xl md:text-6xl font-black">
-                                            {displayName[0]}
-                                        </div>
-                                    )}
+                                    <div
+                                        className="relative group/avatar cursor-pointer w-full h-full"
+                                        onClick={(e) => {
+                                            if (profile?.avatar_url) {
+                                                e.stopPropagation();
+                                                setSelectedFullImage(profile.avatar_url);
+                                            }
+                                        }}
+                                    >
+                                        {uploading ? (
+                                            <span className="material-symbols-outlined text-primary animate-spin text-3xl">sync</span>
+                                        ) : profile?.avatar_url ? (
+                                            <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover transition-transform group-hover/avatar:scale-105" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-4xl md:text-6xl font-black">
+                                                {displayName[0]}
+                                            </div>
+                                        )}
 
-                                    {isOwnProfile && (
-                                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="material-symbols-outlined text-white text-3xl">photo_camera</span>
-                                        </div>
-                                    )}
+                                        {profile?.avatar_url && (
+                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                                                <span className="material-symbols-outlined text-white text-3xl">zoom_in</span>
+                                            </div>
+                                        )}
+
+                                        {isOwnProfile && (
+                                            <div
+                                                className="absolute bottom-2 right-2 size-8 bg-white dark:bg-surface-dark rounded-full shadow-lg flex items-center justify-center border border-slate-100 dark:border-slate-800 z-10"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    document.getElementById('avatar-upload-main')?.click();
+                                                }}
+                                            >
+                                                <span className="material-symbols-outlined text-slate-600 dark:text-slate-300 text-lg">photo_camera</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </label>
                             </div>
                         </div>
@@ -1298,6 +1404,14 @@ const Credential = ({
                         <RouteDetailView route={selectedRoute} profile={profile} user={user} onNavigate={onNavigate} onClose={() => setSelectedRoute(null)} />
                     </div>
                 </div>
+            )}
+
+            {selectedFullImage && (
+                <ImageModal
+                    src={selectedFullImage}
+                    isOpen={!!selectedFullImage}
+                    onClose={() => setSelectedFullImage(null)}
+                />
             )}
         </div>
     );
