@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { t as trans } from '../lib/translations';
+
+
 
 // Fix for default marker icon in Leaflet
 const icon = new L.Icon({
@@ -40,6 +43,10 @@ const RouteMapCard = memo(({ route, onClick, onDelete, isOwnProfile }: { route: 
     const [routePath, setRoutePath] = useState<[number, number][]>([]);
     const [liveDuration, setLiveDuration] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Interaction counts
+    const [likeCount, setLikeCount] = useState(0);
+    const [commentCount, setCommentCount] = useState(0);
 
     // Intersection Observer to detect when card is on screen
     useEffect(() => {
@@ -100,6 +107,26 @@ const RouteMapCard = memo(({ route, onClick, onDelete, isOwnProfile }: { route: 
         return () => { isMounted = false; };
     }, [isVisible, route.start_lat, route.start_lng, route.end_lat, route.end_lng]);
 
+    // Fetch interaction counts
+    useEffect(() => {
+        const fetchCounts = async () => {
+            // Get like count
+            const { count: likes } = await supabase
+                .from('route_likes')
+                .select('*', { count: 'exact', head: true })
+                .eq('route_id', route.id);
+            setLikeCount(likes || 0);
+
+            // Get comment count
+            const { count: comments } = await supabase
+                .from('route_comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('route_id', route.id);
+            setCommentCount(comments || 0);
+        };
+        fetchCounts();
+    }, [route.id]);
+
     return (
         <div
             ref={containerRef}
@@ -150,9 +177,25 @@ const RouteMapCard = memo(({ route, onClick, onDelete, isOwnProfile }: { route: 
             {/* Content */}
             <div className="absolute bottom-0 left-0 right-0 p-2 text-white z-20">
                 <h4 className="font-bold text-xs md:text-sm leading-tight mb-0.5 truncate shadow-sm">{route.name}</h4>
-                <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-semibold text-white/90">
-                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] md:text-[14px]">straighten</span> {route.distance_km}</span>
-                    <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] md:text-[14px]">schedule</span> {liveDuration || route.duration_text}</span>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-semibold text-white/90">
+                        <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] md:text-[14px]">straighten</span> {route.distance_km}</span>
+                        <span className="flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] md:text-[14px]">schedule</span> {liveDuration || route.duration_text}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] md:text-xs font-semibold text-white/90">
+                        {likeCount > 0 && (
+                            <span className="flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[12px] md:text-[14px] filled">favorite</span>
+                                {likeCount}
+                            </span>
+                        )}
+                        {commentCount > 0 && (
+                            <span className="flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[12px] md:text-[14px]">mode_comment</span>
+                                {commentCount}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -172,6 +215,292 @@ const RouteMapCard = memo(({ route, onClick, onDelete, isOwnProfile }: { route: 
         </div>
     );
 });
+
+// Route Detail View Component - Instagram Style
+const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route: any, profile: any, user: any, onNavigate: any, onClose: () => void }) => {
+    const start = useMemo(() => [route.start_lat, route.start_lng] as [number, number], [route]);
+    const end = useMemo(() => [route.end_lat, route.end_lng] as [number, number], [route]);
+    const [routePath, setRoutePath] = useState<[number, number][]>([]);
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // Like and comment state
+    const [isLiked, setIsLiked] = useState(false);
+    const [likeCount, setLikeCount] = useState(0);
+    const [commentCount, setCommentCount] = useState(0);
+    const [showComments, setShowComments] = useState(false);
+    const [comments, setComments] = useState<any[]>([]);
+    const [newComment, setNewComment] = useState('');
+
+    // Fetch route geometry
+    useEffect(() => {
+        const fetchRouteGeometry = async () => {
+            try {
+                const response = await fetch(`https://routing.openstreetmap.de/routed-foot/route/v1/foot/${route.start_lng},${route.start_lat};${route.end_lng},${route.end_lat}?overview=full&geometries=geojson`);
+                const data = await response.json();
+                if (data.routes && data.routes[0]) {
+                    const coordinates = data.routes[0].geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]] as [number, number]);
+                    setRoutePath(coordinates);
+                }
+            } catch (err) { console.error(err); }
+            finally { setIsLoaded(true); }
+        };
+        fetchRouteGeometry();
+    }, [route]);
+
+    // Fetch likes and comments count
+    useEffect(() => {
+        const fetchInteractions = async () => {
+            const { count: likes } = await supabase
+                .from('route_likes')
+                .select('*', { count: 'exact', head: true })
+                .eq('route_id', route.id);
+            setLikeCount(likes || 0);
+
+            if (user?.id) {
+                const { data: userLike } = await supabase
+                    .from('route_likes')
+                    .select('id')
+                    .eq('route_id', route.id)
+                    .eq('user_id', user.id)
+                    .single();
+                setIsLiked(!!userLike);
+            }
+
+            const { count: commentsNum } = await supabase
+                .from('route_comments')
+                .select('*', { count: 'exact', head: true })
+                .eq('route_id', route.id);
+            setCommentCount(commentsNum || 0);
+        };
+        fetchInteractions();
+    }, [route.id, user?.id]);
+
+    // Handle like/unlike
+    const handleLike = async () => {
+        if (!user) {
+            alert('Inicia sesión para dar like');
+            return;
+        }
+
+        if (isLiked) {
+            await supabase
+                .from('route_likes')
+                .delete()
+                .eq('route_id', route.id)
+                .eq('user_id', user.id);
+            setIsLiked(false);
+            setLikeCount(prev => prev - 1);
+        } else {
+            await supabase
+                .from('route_likes')
+                .insert({ route_id: route.id, user_id: user.id });
+            setIsLiked(true);
+            setLikeCount(prev => prev + 1);
+        }
+    };
+
+    // Fetch comments
+    const fetchComments = async () => {
+        const { data } = await supabase
+            .from('route_comments')
+            .select(`
+        *,
+        profiles:user_id (
+          id,
+          full_name,
+          username,
+          avatar_url
+        )
+      `)
+            .eq('route_id', route.id)
+            .order('created_at', { ascending: false });
+        setComments(data || []);
+    };
+
+    // Handle comment submission
+    const handleComment = async () => {
+        if (!user) {
+            alert('Inicia sesión para comentar');
+            return;
+        }
+        if (!newComment.trim()) return;
+
+        await supabase
+            .from('route_comments')
+            .insert({
+                route_id: route.id,
+                user_id: user.id,
+                comment_text: newComment.trim()
+            });
+
+        setNewComment('');
+        setCommentCount(prev => prev + 1);
+        await fetchComments();
+    };
+
+    // Open comments
+    const handleShowComments = () => {
+        setShowComments(true);
+        fetchComments();
+    };
+
+    return (
+        <div>
+            {/* Map Preview */}
+            <div className="aspect-square relative bg-slate-100 dark:bg-slate-900">
+                {!isLoaded ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <span className="material-symbols-outlined animate-pulse text-4xl text-slate-400">map</span>
+                    </div>
+                ) : (
+                    <MapContainer
+                        center={start}
+                        zoom={13}
+                        zoomControl={true}
+                        scrollWheelZoom={true}
+                        className="w-full h-full"
+                    >
+                        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                        <MapUpdater start={start} end={end} />
+                        <Marker position={start} icon={icon} />
+                        <Marker position={end} icon={icon} />
+                        <Polyline
+                            positions={routePath.length > 0 ? routePath : [start, end]}
+                            color="#16a34a"
+                            weight={4}
+                            opacity={0.8}
+                        />
+                    </MapContainer>
+                )}
+
+                {/* Route info overlay */}
+                <div className="absolute bottom-4 left-4 right-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl p-3 shadow-lg">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1 font-semibold">
+                            <span className="material-symbols-outlined text-lg">straighten</span>
+                            {route.distance_km}
+                        </span>
+                        <span className="flex items-center gap-1 font-semibold">
+                            <span className="material-symbols-outlined text-lg">schedule</span>
+                            {route.duration_text}
+                        </span>
+                        <button
+                            onClick={() => {
+                                onClose();
+                                onNavigate('Planner', null, route.id);
+                            }}
+                            className="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-bold hover:bg-primary-dark transition-colors"
+                        >
+                            Abrir en planificador
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Actions and Comments */}
+            <div className="p-4">
+                {/* Action buttons */}
+                <div className="flex items-center gap-4 mb-3">
+                    <button
+                        onClick={handleLike}
+                        className={`flex items-center gap-1 transition-colors ${isLiked ? 'text-red-500' : 'text-slate-600 dark:text-slate-300 hover:text-red-500'}`}
+                    >
+                        <span className={`material-symbols-outlined text-2xl ${isLiked ? 'filled' : ''}`}>favorite</span>
+                        {likeCount > 0 && <span className="text-sm font-bold">{likeCount}</span>}
+                    </button>
+                    <button
+                        onClick={handleShowComments}
+                        className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-2xl">mode_comment</span>
+                        {commentCount > 0 && <span className="text-sm font-bold">{commentCount}</span>}
+                    </button>
+                </div>
+
+                {/* Like count */}
+                {likeCount > 0 && (
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mb-2">
+                        {likeCount} {likeCount === 1 ? 'me gusta' : 'me gusta'}
+                    </p>
+                )}
+
+                {/* View comments button */}
+                {commentCount > 0 && !showComments && (
+                    <button
+                        onClick={handleShowComments}
+                        className="text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 mb-3 transition-colors"
+                    >
+                        Ver los {commentCount} comentarios
+                    </button>
+                )}
+
+                {/* Comments Section */}
+                {showComments && (
+                    <div className="mt-3 space-y-4 max-h-[400px] overflow-y-auto mb-4">
+                        {comments.map((comment) => {
+                            const commentProfile = Array.isArray(comment.profiles) ? comment.profiles[0] : comment.profiles;
+                            return (
+                                <div key={comment.id} className="flex gap-3">
+                                    <img
+                                        src={commentProfile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(commentProfile?.full_name || 'U')}`}
+                                        className="size-8 rounded-full object-cover flex-shrink-0"
+                                        alt={commentProfile?.full_name || 'Usuario'}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-slate-900 dark:text-white">
+                                            <span className="font-bold mr-2">{commentProfile?.full_name || 'Usuario'}</span>
+                                            <span className="text-slate-700 dark:text-slate-300">{comment.comment_text}</span>
+                                        </p>
+                                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                                            <span>{new Date(comment.created_at).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Comment Input */}
+                {user && (
+                    <div className="flex gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                        <input
+                            type="text"
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey && newComment.trim()) {
+                                    e.preventDefault();
+                                    handleComment();
+                                }
+                            }}
+                            onFocus={() => {
+                                if (!showComments) {
+                                    setShowComments(true);
+                                    fetchComments();
+                                }
+                            }}
+                            placeholder="Añade un comentario..."
+                            className="flex-1 text-sm bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
+                        />
+                        {newComment.trim() && (
+                            <button
+                                onClick={handleComment}
+                                className="text-sm font-bold text-primary hover:text-primary-dark transition-colors"
+                            >
+                                Publicar
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                {!user && (
+                    <p className="text-sm text-slate-400 pt-3 border-t border-slate-200 dark:border-slate-800">Inicia sesión para comentar</p>
+                )}
+            </div>
+        </div>
+    );
+};
 
 interface Props {
     // ... rest of file
@@ -205,7 +534,11 @@ const Credential = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
+
     const [savedRoutes, setSavedRoutes] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'friends'>('posts');
+    const [selectedRoute, setSelectedRoute] = useState<any | null>(null);
+
 
     useEffect(() => {
         const fetchResults = async () => {
@@ -480,20 +813,29 @@ const Credential = ({
     const metrics = {
         following: counts.following,
         followers: counts.followers,
-        friends: counts.friends
+        friends: counts.friends,
+        posts: savedRoutes.length
     };
 
     const t = {
-        followers: language === 'en' ? 'Followers' : 'Seguidores',
-        following: language === 'en' ? 'Following' : 'Siguiendo',
-        friends: language === 'en' ? 'Friends' : 'Amigos',
-        signOut: language === 'en' ? 'Sign Out' : 'Cerrar Sesión',
-        dashboard: language === 'en' ? 'My Profile' : 'Mi Perfil',
-        plan: language === 'en' ? 'Plan' : 'Planificar',
-        back: language === 'en' ? 'Back' : 'Volver',
-        follow: language === 'en' ? 'Follow' : 'Seguir',
-        notifs: language === 'en' ? 'Notifications' : 'Notificaciones',
+        followers: trans('followers', language),
+        following: trans('following', language),
+        friends: trans('friends', language),
+        signOut: trans('logout', language),
+        dashboard: trans('dashboard', language),
+        plan: trans('plan', language),
+        follow: trans('follow', language),
+        following_btn: trans('following', language),
+        notifs: trans('notifications', language),
+        editProfile: trans('editProfile', language),
+        message: trans('message', language),
+        posts: trans('posts', language),
+        saved: trans('saved', language),
+        achievements: trans('achievements', language),
+        bio_default: trans('bio', language),
     };
+
+
 
     if (loading) {
         return (
@@ -647,143 +989,231 @@ const Credential = ({
                 </div>
             </header>
 
-            <main className="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                {/* Profile Identity */}
-                <div className="max-w-4xl mx-auto mb-16 flex flex-col items-center text-center">
-                    <div className="relative group mb-6">
-                        {isOwnProfile && (
-                            <input
-                                type="file"
-                                id="avatar-upload-main"
-                                accept="image/*"
-                                onChange={handleUploadAvatar}
-                                className="hidden"
-                                disabled={uploading}
-                            />
-                        )}
-                        <label
-                            htmlFor={isOwnProfile ? "avatar-upload-main" : undefined}
-                            className={`size-32 rounded-3xl border-4 border-white dark:border-slate-800 bg-slate-100 dark:bg-slate-800 shadow-xl flex items-center justify-center overflow-hidden transition-all ${isOwnProfile ? 'cursor-pointer hover:scale-105 active:scale-95 group' : ''} relative ${uploading ? 'animate-pulse' : ''}`}
-                        >
-                            {uploading ? (
-                                <span className="material-symbols-outlined text-primary animate-spin text-3xl">sync</span>
-                            ) : profile?.avatar_url ? (
-                                <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-4xl font-black">
-                                    {displayName[0]}
-                                </div>
-                            )}
+            <main className="flex-grow w-full max-w-4xl mx-auto px-4 md:px-0 py-8 md:py-12">
+                {/* Instagram Header Style */}
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-16 mb-12 md:mb-16">
+                    <div className="relative flex-none">
+                        <div className="size-24 md:size-40 rounded-full border-2 border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 p-1">
+                            <div className="relative group w-full h-full rounded-full overflow-hidden">
+                                {isOwnProfile && (
+                                    <input
+                                        type="file"
+                                        id="avatar-upload-main"
+                                        accept="image/*"
+                                        onChange={handleUploadAvatar}
+                                        className="hidden"
+                                        disabled={uploading}
+                                    />
+                                )}
+                                <label
+                                    htmlFor={isOwnProfile ? "avatar-upload-main" : undefined}
+                                    className={`w-full h-full flex items-center justify-center transition-all ${isOwnProfile ? 'cursor-pointer group' : ''} relative ${uploading ? 'animate-pulse' : ''}`}
+                                >
+                                    {uploading ? (
+                                        <span className="material-symbols-outlined text-primary animate-spin text-3xl">sync</span>
+                                    ) : profile?.avatar_url ? (
+                                        <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-4xl md:text-6xl font-black">
+                                            {displayName[0]}
+                                        </div>
+                                    )}
 
-                            {isOwnProfile && (
-                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <span className="material-symbols-outlined text-white text-3xl">photo_camera</span>
-                                    <span className="text-[10px] text-white font-bold uppercase tracking-widest mt-1">
-                                        {language === 'en' ? 'Edit Photo' : 'Editar Foto'}
-                                    </span>
-                                </div>
-                            )}
-                        </label>
-                        {isOwnProfile && !uploading && (
-                            <div className="absolute -bottom-2 -right-2 size-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-900">
-                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                                    {isOwnProfile && (
+                                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span className="material-symbols-outlined text-white text-3xl">photo_camera</span>
+                                        </div>
+                                    )}
+                                </label>
                             </div>
-                        )}
-                    </div>
-
-                    <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2">{displayName}</h1>
-                    <p className="text-slate-500 dark:text-slate-400 font-medium">
-                        {profile?.username || (isOwnProfile ? user?.user_metadata?.username : '@peregrino')}
-                    </p>
-
-                    {!isOwnProfile && (
-                        <div className="mt-6 flex gap-3">
-                            <button
-                                onClick={handleFollow}
-                                className={`px-8 py-2.5 font-bold rounded-2xl shadow-lg transition-all active:scale-95 flex items-center gap-2 ${isFollowing
-                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-red-50 hover:text-red-500'
-                                    : 'bg-primary text-white shadow-primary/20 hover:bg-primary-dark'
-                                    }`}
-                            >
-                                <span className="material-symbols-outlined text-[20px]">
-                                    {isFollowing ? 'check_circle' : 'person_add'}
-                                </span>
-                                {isFollowing ? t.following : t.follow}
-                            </button>
-                            <button
-                                onClick={() => onNavigate('Chat', selectedProfileId)}
-                                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                                title={language === 'en' ? 'Send message' : language === 'es' ? 'Enviar mensaje' : 'Send message'}
-                            >
-                                <span className="material-symbols-outlined">mail</span>
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <div className="max-w-4xl mx-auto">
-                    <div className="grid grid-cols-3 gap-3 md:gap-6">
-                        <div
-                            onClick={() => fetchList('following')}
-                            className="bg-surface-light dark:bg-surface-dark p-4 md:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-3 cursor-pointer hover:border-primary/50 transition-all hover:shadow-md active:scale-95"
-                        >
-                            <span className="material-symbols-outlined text-primary bg-primary/10 p-2 md:p-3 rounded-xl md:rounded-2xl text-xl md:text-3xl">person_add</span>
-                            <span className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white">{metrics.following}</span>
-                            <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-center">{t.following}</p>
-                        </div>
-
-                        <div
-                            onClick={() => fetchList('followers')}
-                            className="bg-surface-light dark:bg-surface-dark p-4 md:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-3 cursor-pointer hover:border-primary/50 transition-all hover:shadow-md active:scale-95"
-                        >
-                            <span className="material-symbols-outlined text-primary bg-primary/10 p-2 md:p-3 rounded-xl md:rounded-2xl text-xl md:text-3xl">group</span>
-                            <span className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white">{metrics.followers}</span>
-                            <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-center">{t.followers}</p>
-                        </div>
-
-                        <div
-                            onClick={() => fetchList('friends')}
-                            className="bg-primary/5 dark:bg-primary/10 p-4 md:p-8 rounded-2xl border-2 border-primary/20 dark:border-primary/30 shadow-lg flex flex-col items-center justify-center gap-1 md:gap-3 relative overflow-hidden cursor-pointer hover:bg-primary/10 transition-all active:scale-95"
-                        >
-                            <div className="absolute -right-4 -top-4 w-20 h-20 bg-primary/10 rounded-full blur-2xl"></div>
-                            <span className="material-symbols-outlined text-white bg-primary p-2 md:p-3 rounded-xl md:rounded-2xl text-xl md:text-3xl shadow-lg shadow-primary/30">volunteer_activism</span>
-                            <span className="text-2xl md:text-4xl font-black text-primary">{metrics.friends}</span>
-                            <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest text-primary text-center">{t.friends}</p>
                         </div>
                     </div>
+                    {/* Info Column */}
+                    <div className="flex-1 flex flex-col gap-6 w-full text-center md:text-left">
+                        <div className="flex flex-col md:flex-row items-center gap-4">
+                            <h1 className="text-2xl md:text-3xl font-light text-slate-900 dark:text-white uppercase tracking-tight">{profile?.username || (isOwnProfile ? user?.user_metadata?.username : '@peregrino')}</h1>
+
+                            <div className="flex gap-2">
+                                {isOwnProfile ? (
+                                    <>
+                                        <button className="px-5 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                            {t.editProfile}
+                                        </button>
+                                        <button className="p-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                            <span className="material-symbols-outlined text-xl">settings</span>
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={handleFollow}
+                                            className={`px-6 py-1.5 font-bold rounded-lg text-sm transition-all active:scale-95 ${isFollowing
+                                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-red-50 hover:text-red-500'
+                                                : 'bg-primary text-white hover:bg-primary-dark'
+                                                }`}
+                                        >
+                                            {isFollowing ? t.following_btn : t.follow}
+                                        </button>
+                                        <button
+                                            onClick={() => onNavigate('Chat', selectedProfileId)}
+                                            className="px-6 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                                        >
+                                            {t.message}
+                                        </button>
+                                        <button className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                                            <span className="material-symbols-outlined text-xl">person_add</span>
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Stats Row */}
+                        <div className="flex justify-center md:justify-start gap-8 md:gap-10 border-y md:border-y-0 border-slate-100 dark:border-slate-800 py-3 md:py-0">
+                            <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2">
+                                <span className="font-bold text-slate-900 dark:text-white">{metrics.posts}</span>
+                                <span className="text-slate-500 text-sm">{t.posts}</span>
+                            </div>
+                            <button onClick={() => fetchList('followers')} className="flex flex-col md:flex-row items-center gap-1 md:gap-2 hover:opacity-70 transition-opacity">
+                                <span className="font-bold text-slate-900 dark:text-white">{metrics.followers}</span>
+                                <span className="text-slate-500 text-sm">{t.followers}</span>
+                            </button>
+                            <button onClick={() => fetchList('following')} className="flex flex-col md:flex-row items-center gap-1 md:gap-2 hover:opacity-70 transition-opacity">
+                                <span className="font-bold text-slate-900 dark:text-white">{metrics.following}</span>
+                                <span className="text-slate-500 text-sm">{t.following}</span>
+                            </button>
+                        </div>
+
+                        {/* Bio Section */}
+                        <div className="space-y-1">
+                            <p className="font-bold text-slate-900 dark:text-white">{displayName}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{profile?.bio || t.bio_default}</p>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Saved Routes Section */}
-                <div className="max-w-4xl mx-auto mt-12">
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">map</span>
-                        {language === 'en' ? 'Saved Journeys' : 'Rutas Guardadas'}
-                    </h3>
+                {/* Tabs Section */}
 
-                    {savedRoutes.length > 0 ? (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
-                            {savedRoutes.map(route => (
-                                <RouteMapCard
-                                    key={route.id}
-                                    route={route}
-                                    onClick={() => onNavigate('Planner', null, route.id)}
-                                    onDelete={() => handleDeleteRoute(route.id)}
-                                    isOwnProfile={isOwnProfile}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                            <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">map</span>
-                            <p className="text-slate-500 dark:text-slate-400 font-medium">{language === 'en' ? 'No saved routes yet.' : 'No hay rutas guardadas aún.'}</p>
-                            {isOwnProfile && (
-                                <button onClick={() => onNavigate('Planner')} className="mt-4 text-primary font-bold hover:underline">
-                                    {language === 'en' ? 'Plan a route' : 'Planificar una ruta'}
-                                </button>
+                <div className="max-w-4xl mx-auto border-t border-slate-200 dark:border-slate-800">
+                    <div className="flex justify-center gap-12 md:gap-16">
+                        <button
+                            onClick={() => setActiveTab('posts')}
+                            className={`flex items-center gap-2 py-4 border-t transition-all uppercase tracking-widest text-[10px] md:text-xs font-bold ${activeTab === 'posts' ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white' : 'border-transparent text-slate-400 hover:text-slate-500'}`}
+                        >
+                            <span className="material-symbols-outlined text-lg">grid_on</span>
+                            {t.posts}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('saved')}
+                            className={`flex items-center gap-2 py-4 border-t transition-all uppercase tracking-widest text-[10px] md:text-xs font-bold ${activeTab === 'saved' ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white' : 'border-transparent text-slate-400 hover:text-slate-500'}`}
+                        >
+                            <span className="material-symbols-outlined text-lg">military_tech</span>
+                            {t.achievements}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('friends')}
+                            className={`flex items-center gap-2 py-4 border-t transition-all uppercase tracking-widest text-[10px] md:text-xs font-bold ${activeTab === 'friends' ? 'border-slate-900 dark:border-white text-slate-900 dark:text-white' : 'border-transparent text-slate-400 hover:text-slate-500'}`}
+                        >
+                            <span className="material-symbols-outlined text-lg">group</span>
+                            {t.friends} ( {metrics.friends} )
+                        </button>
+                    </div>
+                </div>
+
+                {/* Grid Content Section */}
+                <div className="max-w-4xl mx-auto mt-6">
+                    {activeTab === 'posts' && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-1 md:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {savedRoutes.length > 0 ? (
+                                savedRoutes.map(route => (
+                                    <RouteMapCard
+                                        key={route.id}
+                                        route={route}
+                                        onClick={() => setSelectedRoute(route)}
+                                        onDelete={() => handleDeleteRoute(route.id)}
+                                        isOwnProfile={isOwnProfile}
+                                    />
+                                ))
+                            ) : (
+                                <div className="col-span-2 md:col-span-3 text-center py-20">
+                                    <div className="size-20 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto mb-4">
+                                        <span className="material-symbols-outlined text-4xl text-slate-300">add_a_photo</span>
+                                    </div>
+                                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">Compartir rutas</h3>
+                                    <p className="text-slate-400 text-sm max-w-xs mx-auto">Cuando guardes rutas planificadas, aparecerán aquí para tus seguidores.</p>
+                                    {isOwnProfile && (
+                                        <button onClick={() => onNavigate('Planner')} className="mt-4 text-primary font-bold text-sm">Crear tu primera ruta</button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     )}
+
+                    {activeTab === 'saved' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 px-2 md:px-0">
+                                {[
+                                    { id: 'first_step', icon: 'hiking', label: 'Primer Paso', desc: 'Crea tu primera ruta personalizada', unlocked: savedRoutes.length > 0 },
+                                    { id: 'gran_caminante', icon: 'distance', label: 'Gran Caminante', desc: 'Supera los 100km planificados', unlocked: metrics.posts >= 10 },
+                                    { id: 'friend_maker', icon: 'diversity_3', label: 'Compañero', desc: 'Ten al menos 5 amigos en el Camino', unlocked: metrics.friends >= 5 },
+                                    { id: 'photographer', icon: 'photo_camera', label: 'Fotógrafo', desc: 'Sube una foto de perfil', unlocked: !!profile?.avatar_url },
+                                    { id: 'planner', icon: 'map', label: 'Cartógrafo', desc: 'Guarda 5 rutas diferentes', unlocked: savedRoutes.length >= 5 },
+                                    { id: 'veteran', icon: 'workspace_premium', label: 'Veterano', desc: 'Más de 10 seguidores', unlocked: metrics.followers >= 10 }
+                                ].map((achievement) => (
+                                    <div
+                                        key={achievement.id}
+                                        className={`group relative p-6 rounded-2xl border-2 transition-all duration-500 flex flex-col items-center text-center ${achievement.unlocked
+                                            ? 'bg-white dark:bg-slate-900 border-primary/20 shadow-md shadow-primary/5'
+                                            : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-60'
+                                            }`}
+                                    >
+                                        <div className={`size-16 rounded-full flex items-center justify-center mb-4 transition-transform duration-500 group-hover:scale-110 ${achievement.unlocked
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
+                                            }`}>
+                                            <span className="material-symbols-outlined text-3xl filled">{achievement.icon}</span>
+                                        </div>
+
+                                        <h4 className={`text-sm font-black uppercase tracking-tight mb-1 ${achievement.unlocked ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+                                            {achievement.label}
+                                        </h4>
+                                        <p className="text-[10px] md:text-xs text-slate-400 leading-tight">
+                                            {achievement.desc}
+                                        </p>
+
+                                        {!achievement.unlocked && (
+                                            <div className="absolute top-2 right-2">
+                                                <span className="material-symbols-outlined text-slate-300 text-sm">lock</span>
+                                            </div>
+                                        )}
+                                        {achievement.unlocked && (
+                                            <div className="absolute top-2 right-2 animate-in zoom-in duration-500">
+                                                <span className="material-symbols-outlined text-primary text-sm filled">verified</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'friends' && (
+                        <div className="bg-slate-50 dark:bg-slate-900 rounded-3xl p-8 text-center animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                                <span className="material-symbols-outlined text-4xl text-primary">volunteer_activism</span>
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{metrics.friends} Amigos mutuos</h3>
+                            <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">Los amigos mutuos son peregrinos que se siguen el uno al otro.</p>
+                            <button
+                                onClick={() => fetchList('friends')}
+                                className="px-8 py-2 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
+                            >
+                                Ver lista de amigos
+                            </button>
+                        </div>
+                    )}
                 </div>
+
 
                 {/* List Modal */}
                 {activeList && (
@@ -849,6 +1279,24 @@ const Credential = ({
                     </div>
                 )}
             </main>
+
+            {/* Route Detail Modal - Instagram Style */}
+            {selectedRoute && (
+                <div className="fixed inset-0 bg-black/80 z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setSelectedRoute(null)}>
+                    <div className="bg-white dark:bg-surface-dark rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                        {/* Header with close button */}
+                        <div className="sticky top-0 bg-white dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between z-10">
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">{selectedRoute.name}</h3>
+                            <button onClick={() => setSelectedRoute(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        {/* Route content - reusing the card structure */}
+                        <RouteDetailView route={selectedRoute} profile={profile} user={user} onNavigate={onNavigate} onClose={() => setSelectedRoute(null)} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

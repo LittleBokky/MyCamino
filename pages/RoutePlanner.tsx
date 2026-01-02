@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
+import { t as trans } from '../lib/translations';
+
 
 // Custom Marker Icon definition
 const icon = new L.Icon({
@@ -210,17 +212,22 @@ const MapResizer = () => {
 
 const RoutePlanner = ({
   onNavigate, user, notifications, unreadCount, showNotifications,
-  setShowNotifications, markAllAsRead, language, selectedRouteId
+  setShowNotifications, markAllAsRead, language, setLanguage, selectedRouteId
 }: Props) => {
   const [showListOnMobile, setShowListOnMobile] = useState(true);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [mapStyle, setMapStyle] = useState<'standard' | 'satellite'>('standard');
   const [startPoint, setStartPoint] = useState<L.LatLng | null>(null);
+
   const [endPoint, setEndPoint] = useState<L.LatLng | null>(null);
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [distance, setDistance] = useState<string>('');
   const [duration, setDuration] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<string>('');
+  const [routeName, setRouteName] = useState<string>('');
   const [saving, setSaving] = useState(false);
+
 
   // Effect to handle selectedRouteId (loading saved routes)
   useEffect(() => {
@@ -354,14 +361,15 @@ const RoutePlanner = ({
 
     setSaving(true);
     try {
-      const routeName = selectedPreset
+      const finalName = selectedPreset
         ? FAMOUS_ROUTES_GROUPED.flatMap(g => g.routes).find(r => r.id === selectedPreset)?.name
-        : `Custom Route ${new Date().toLocaleDateString()}`;
+        : (routeName.trim() || `Custom Route ${new Date().toLocaleDateString()}`);
 
       const { error } = await supabase.from('user_routes').insert({
         user_id: user.id,
-        name: routeName,
+        name: finalName,
         route_id: selectedPreset || 'custom',
+
         start_lat: startPoint.lat,
         start_lng: startPoint.lng,
         end_lat: endPoint.lat,
@@ -406,9 +414,60 @@ const RoutePlanner = ({
     setDistance('');
     setDuration('');
     setSelectedPreset('');
+    setRouteName('');
+  };
+
+
+  const languages = [
+    { code: 'es', label: 'Español', flag: '🇪🇸' },
+    { code: 'en', label: 'English', flag: '🇬🇧' },
+    { code: 'pt', label: 'Português', flag: '🇵🇹' },
+    { code: 'fr', label: 'Français', flag: '🇫🇷' },
+    { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
+    { code: 'it', label: 'Italiano', flag: '🇮🇹' },
+    { code: 'zh', label: '中文', flag: '🇨🇳' },
+    { code: 'ja', label: '日本語', flag: '🇯🇵' },
+  ];
+
+  const t = {
+    routePlanner: trans('routePlanner', language),
+    designPath: trans('designPath', language),
+    instructions: trans('instructions', language),
+    chooseFamous: trans('chooseFamous', language),
+    selectRoute: trans('selectRoute', language),
+    orCustomize: trans('orCustomize', language),
+    clickStart: trans('clickStart', language),
+    clickEnd: trans('clickEnd', language),
+    viewEstimation: trans('viewEstimation', language),
+    values: trans('values', language),
+    estimation: trans('estimation', language),
+    reset: trans('reset', language),
+    saveToProfile: trans('saveToProfile', language),
+    saving: trans('saving', language),
+    startPoint: trans('startPoint', language),
+    endPoint: trans('endPoint', language),
+    standard: trans('standard', language),
+    satellite: trans('satellite', language),
+    routeName: trans('routeName', language),
+    routeNamePlaceholder: trans('routeNamePlaceholder', language),
+  };
+
+
+
+  const translateCountry = (country: string) => {
+    const countryNames: Record<string, Record<string, string>> = {
+      'Spain': { es: 'España', pt: 'Espanha', fr: 'Espagne', de: 'Spanien', it: 'Spagna', zh: '西班牙', ja: 'スペイン' },
+      'Portugal': { es: 'Portugal', pt: 'Portugal', fr: 'Portugal', de: 'Portugal', it: 'Portogallo', zh: '葡萄牙', ja: 'ポルトガル' },
+      'France': { es: 'Francia', pt: 'França', fr: 'France', de: 'Frankreich', it: 'Francia', zh: '法国', ja: 'フランス' },
+      'Ireland (Celtic Camino)': { es: 'Irlanda (Camino Celta)', pt: 'Irlanda (Caminho Celta)', fr: 'Irlande (Chemin Celtique)', de: 'Irland (Keltischer Weg)', it: 'Irlanda (Cammino Celtico)', zh: '爱尔兰（凯尔特之路）', ja: 'アイルランド（ケルトの道）' },
+      'United Kingdom': { es: 'Reino Unido', pt: 'Reino Unido', fr: 'Royaume-Uni', de: 'Vereinigtes Königreich', it: 'Regno Unito', zh: '英国', ja: 'イギリス' }
+    };
+    return countryNames[country]?.[language] || country;
+
   };
 
   return (
+
     <div className="bg-background-light dark:bg-background-dark text-text-main dark:text-white font-display overflow-hidden flex flex-col h-screen relative">
       <header className="flex-none flex items-center justify-between whitespace-nowrap border-b border-solid border-border-light dark:border-border-dark px-6 py-3 bg-white dark:bg-background-dark z-20 relative shadow-sm">
         <div className="flex items-center gap-4 cursor-pointer" onClick={() => onNavigate('Landing')}>
@@ -419,8 +478,38 @@ const RoutePlanner = ({
           </div>
           <h2 className="text-text-main dark:text-white text-xl font-bold leading-tight tracking-tight">MyCamino</h2>
         </div>
-        <div className="flex items-center gap-8">
-          {/* Nav removed as requested */}
+        <div className="flex items-center gap-6">
+          {/* Language Switcher */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary hover:text-white dark:hover:bg-primary transition-all duration-300 text-xs font-bold text-[#0e1b14] dark:text-white"
+            >
+              <span className="material-symbols-outlined text-[16px]">language</span>
+              {language.toUpperCase()}
+            </button>
+
+            {showLanguageMenu && (
+              <div className="absolute top-full right-0 mt-2 w-40 bg-white dark:bg-[#1a2b21] border border-slate-100 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden z-[100] animate-in fade-in zoom-in-50 duration-200">
+                <div className="py-1">
+                  {languages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        setLanguage(lang.code as any);
+                        setShowLanguageMenu(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2 ${language === lang.code ? 'text-primary' : 'text-slate-700 dark:text-gray-300'}`}
+                    >
+                      <span className="text-sm">{lang.flag}</span>
+                      {lang.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-3">
             {user && (
               <div className="relative">
@@ -478,6 +567,7 @@ const RoutePlanner = ({
             </div>
           </div>
         </div>
+
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -494,9 +584,10 @@ const RoutePlanner = ({
           <div className="p-6 border-b border-border-light dark:border-border-dark flex-none bg-white dark:bg-background-dark relative">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h1 className="text-2xl font-bold text-text-main dark:text-white mb-1">Route Planner</h1>
-                <p className="text-text-muted dark:text-gray-400 text-sm">Design your own walking path</p>
+                <h1 className="text-2xl font-bold text-text-main dark:text-white mb-1">{t.routePlanner}</h1>
+                <p className="text-text-muted dark:text-gray-400 text-sm">{t.designPath}</p>
               </div>
+
               <button
                 onClick={() => setShowListOnMobile(false)}
                 className="lg:hidden p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-800 rounded-full"
@@ -506,20 +597,22 @@ const RoutePlanner = ({
             </div>
 
             <div className="bg-primary/5 dark:bg-primary/10 rounded-xl p-6 border border-primary/10 mb-6 max-h-[40vh] overflow-y-auto lg:max-h-none">
-              <h3 className="text-sm font-bold text-text-main dark:text-white mb-4">Instructions</h3>
+              <h3 className="text-sm font-bold text-text-main dark:text-white mb-4">{t.instructions}</h3>
 
               <div className="mb-4">
-                <label className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2 block">Choose Famous Route</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2 block">{t.chooseFamous}</label>
                 <div className="relative">
                   <select
                     value={selectedPreset}
                     onChange={handlePresetChange}
                     className="w-full appearance-none bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark rounded-xl px-4 py-3 pr-10 text-text-main dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow cursor-pointer text-sm"
                   >
-                    <option value="">Select a route...</option>
+                    <option value="">{t.selectRoute}</option>
+
                     {FAMOUS_ROUTES_GROUPED.map(group => (
-                      <optgroup key={group.country} label={group.country}>
+                      <optgroup key={group.country} label={translateCountry(group.country)}>
                         {group.routes.map(route => (
+
                           <option key={route.id} value={route.id}>{route.name}</option>
                         ))}
                       </optgroup>
@@ -531,24 +624,39 @@ const RoutePlanner = ({
                 </div>
               </div>
 
+              {!selectedPreset && (
+                <div className="mb-4 animate-fade-in">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2 block">{t.routeName}</label>
+                  <input
+                    type="text"
+                    value={routeName}
+                    onChange={(e) => setRouteName(e.target.value)}
+                    placeholder={t.routeNamePlaceholder}
+                    className="w-full bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark rounded-xl px-4 py-3 text-text-main dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow text-sm"
+                  />
+                </div>
+              )}
+
               <div className="flex items-center gap-3 my-4">
+
                 <div className="h-px bg-border-light dark:bg-border-dark flex-1"></div>
-                <span className="text-[10px] text-text-muted uppercase font-bold">OR CUSTOMIZE</span>
+                <span className="text-[10px] text-text-muted uppercase font-bold">{t.orCustomize}</span>
                 <div className="h-px bg-border-light dark:bg-border-dark flex-1"></div>
               </div>
 
               <ol className="list-decimal pl-4 space-y-2 text-sm text-text-muted">
-                <li className={!startPoint && !selectedPreset ? "font-bold text-primary" : ""}>Click on the map to set Start Point</li>
-                <li className={startPoint && !endPoint ? "font-bold text-primary" : ""}>Click again to set End Point</li>
-                <li>View estimated distance and duration</li>
+                <li className={!startPoint && !selectedPreset ? "font-bold text-primary" : ""}>{t.clickStart}</li>
+                <li className={startPoint && !endPoint ? "font-bold text-primary" : ""}>{t.clickEnd}</li>
+                <li>{t.viewEstimation}</li>
               </ol>
+
             </div>
 
             {(distance || loading) && (
               <div className="flex flex-col gap-4 animate-scale-in">
                 <div className="flex justify-between bg-white dark:bg-gray-800 rounded-xl p-4 border border-border-light dark:border-border-dark shadow-sm">
                   <div className="text-center flex-1">
-                    <p className="text-xs text-text-muted uppercase font-semibold">Values</p>
+                    <p className="text-xs text-text-muted uppercase font-semibold">{t.values}</p>
                     <div className="flex items-center justify-center gap-2 mt-1">
                       <span className="material-symbols-outlined text-primary">straighten</span>
                       <p className="text-xl font-bold text-text-main dark:text-white">{loading ? '...' : distance}</p>
@@ -556,13 +664,14 @@ const RoutePlanner = ({
                   </div>
                   <div className="w-px bg-border-light dark:bg-border-dark mx-2"></div>
                   <div className="text-center flex-1">
-                    <p className="text-xs text-text-muted uppercase font-semibold">Estimation</p>
+                    <p className="text-xs text-text-muted uppercase font-semibold">{t.estimation}</p>
                     <div className="flex items-center justify-center gap-2 mt-1">
                       <span className="material-symbols-outlined text-primary">timer</span>
                       <p className="text-xl font-bold text-text-main dark:text-white">{loading ? '...' : duration}</p>
                     </div>
                   </div>
                 </div>
+
               </div>
             )}
 
@@ -573,7 +682,7 @@ const RoutePlanner = ({
                 disabled={!startPoint}
               >
                 <span className="material-symbols-outlined">restart_alt</span>
-                Reset
+                {t.reset}
               </button>
               <button
                 onClick={saveRoute}
@@ -585,8 +694,9 @@ const RoutePlanner = ({
                 ) : (
                   <span className="material-symbols-outlined">bookmark_add</span>
                 )}
-                {saving ? 'Saving...' : 'Save to Profile'}
+                {saving ? t.saving : t.saveToProfile}
               </button>
+
             </div>
           </div>
         </aside>
@@ -595,23 +705,41 @@ const RoutePlanner = ({
           <div className="absolute inset-0">
             <MapContainer center={[42.8125, -1.6458]} zoom={8} scrollWheelZoom={true} className="h-full w-full outline-none z-0" zoomControl={false}>
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution={mapStyle === 'standard'
+                  ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  : 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'}
+                url={mapStyle === 'standard'
+                  ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"}
               />
+              {mapStyle === 'satellite' && (
+                <>
+                  <TileLayer
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
+                  />
+                  <TileLayer
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                  />
+                </>
+              )}
+
+
+
               <MapEvents onMapClick={handleMapClick} />
               <MapResizer />
 
               {startPoint && (
                 <Marker position={startPoint} icon={icon}>
-                  <Popup>Start Point</Popup>
+                  <Popup>{t.startPoint}</Popup>
                 </Marker>
               )}
 
               {endPoint && (
                 <Marker position={endPoint} icon={icon}>
-                  <Popup>End Point</Popup>
+                  <Popup>{t.endPoint}</Popup>
                 </Marker>
               )}
+
 
               {routePath.length > 0 && (
                 <Polyline positions={routePath} color="#17cf73" weight={5} />
@@ -631,10 +759,22 @@ const RoutePlanner = ({
 
           <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-1 gap-1 flex">
-              <button className="px-3 py-1.5 rounded-md bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors">Standard</button>
-              <button className="px-3 py-1.5 rounded-md text-text-muted hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-medium transition-colors">Satellite</button>
+              <button
+                onClick={() => setMapStyle('standard')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${mapStyle === 'standard' ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              >
+                {t.standard}
+              </button>
+              <button
+                onClick={() => setMapStyle('satellite')}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${mapStyle === 'satellite' ? 'bg-primary/10 text-primary' : 'text-text-muted hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              >
+                {t.satellite}
+              </button>
             </div>
           </div>
+
+
         </main>
       </div>
     </div>
