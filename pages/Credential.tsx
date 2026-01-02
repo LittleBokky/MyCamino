@@ -389,9 +389,10 @@ const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route:
                                 onClose();
                                 onNavigate('Planner', null, route.id);
                             }}
-                            className="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-bold hover:bg-primary-dark transition-colors"
+                            className="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-bold hover:bg-primary-dark transition-colors flex items-center gap-1"
                         >
-                            Abrir en planificador
+                            <span className="material-symbols-outlined text-sm">map</span>
+                            Ver ruta
                         </button>
                     </div>
                 </div>

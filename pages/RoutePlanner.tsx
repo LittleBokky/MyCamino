@@ -198,6 +198,22 @@ const MapEvents = ({ onMapClick }: { onMapClick: (e: L.LeafletMouseEvent) => voi
   return null;
 };
 
+// Automatically fits the map bounds to show the points and route
+const MapFocuser = ({ start, end }: { start: L.LatLng | null, end: L.LatLng | null }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (start && end) {
+      const bounds = L.latLngBounds(start, end);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true });
+    } else if (start) {
+      map.setView(start, 13, { animate: true });
+    }
+  }, [start, end, map]);
+
+  return null;
+};
+
 // Fix for Leaflet not resizing correctly in flex containers
 const MapResizer = () => {
   const map = useMap();
@@ -248,6 +264,7 @@ const RoutePlanner = ({
         setStartPoint(start);
         setEndPoint(end);
         fetchRoute(start, end);
+        setShowListOnMobile(false);
         return;
       }
 
@@ -274,6 +291,7 @@ const RoutePlanner = ({
 
         // Ideally we fetch route again or store geometry. For now fetch again.
         fetchRoute(start, end);
+        setShowListOnMobile(false);
       }
       setLoading(false);
     };
@@ -345,6 +363,7 @@ const RoutePlanner = ({
         setStartPoint(start);
         setEndPoint(end);
         fetchRoute(start, end);
+        setShowListOnMobile(false);
         // On mobile, maybe we want to close list? keeping it open for now
       }
     } else {
@@ -727,6 +746,7 @@ const RoutePlanner = ({
 
               <MapEvents onMapClick={handleMapClick} />
               <MapResizer />
+              <MapFocuser start={startPoint} end={endPoint} />
 
               {startPoint && (
                 <Marker position={startPoint} icon={icon}>

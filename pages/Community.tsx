@@ -274,6 +274,15 @@ const FeedRouteCard = memo(({ route, onNavigate, user }: { route: any, onNavigat
           </button>
         </div>
 
+        {/* View Route Primary Button */}
+        <button
+          onClick={() => onNavigate('Planner', null, route.id)}
+          className="w-full mb-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary dark:text-primary-light rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-lg">map</span>
+          Ver ruta en el mapa
+        </button>
+
         {/* Like count */}
         {likeCount > 0 && (
           <p className="text-xs font-bold text-slate-900 dark:text-white mb-2">
