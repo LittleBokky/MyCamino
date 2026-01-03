@@ -204,32 +204,31 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
         const findOrCreateConversation = async () => {
             setInitializingChat(true);
             try {
-                // Check if conversation already exists
-                const { data: existingConv } = await supabase
+                // Improved Check: Fetch ALL participants for user's conversations at once
+                const { data: myConvs } = await supabase
                     .from('conversation_participants')
                     .select('conversation_id')
                     .eq('user_id', user.id);
 
-                if (existingConv && existingConv.length > 0) {
-                    for (const conv of existingConv) {
-                        const { data: otherParticipant } = await supabase
-                            .from('conversation_participants')
-                            .select('user_id')
-                            .eq('conversation_id', conv.conversation_id)
-                            .eq('user_id', selectedUserId)
-                            .single();
+                if (myConvs && myConvs.length > 0) {
+                    const myConvIds = myConvs.map(c => c.conversation_id);
+                    // Check if other user is in ANY of these conversations
+                    const { data: existing } = await supabase
+                        .from('conversation_participants')
+                        .select('conversation_id')
+                        .in('conversation_id', myConvIds)
+                        .eq('user_id', selectedUserId)
+                        .maybeSingle();
 
-                        if (otherParticipant) {
-                            setSelectedConversation(conv.conversation_id);
-                            // Ensure the list is updated so this chat appears
-                            await fetchConversations();
-                            setInitializingChat(false);
-                            return;
-                        }
+                    if (existing) {
+                        setSelectedConversation(existing.conversation_id);
+                        await fetchConversations();
+                        setInitializingChat(false);
+                        return;
                     }
                 }
 
-                // Create new conversation safely using RPC
+                // Create new conversation safely using RPC or Fallback
                 const { data: newConvId, error: rpcError } = await supabase
                     .rpc('create_new_conversation', { other_user_id: selectedUserId });
 
@@ -241,7 +240,22 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                 await fetchConversations();
             } catch (error: any) {
                 console.error('Error finding/creating conversation:', error);
-                alert(`Error: ${error.message || error.error_description || 'Unknown error'}`);
+
+                // Fallback creation logic if RPC fails or doesn't exist
+                if (error.message?.includes('function') || error.code === '42883') {
+                    // Manual creation
+                    const { data: newConv } = await supabase.from('conversations').insert({}).select().single();
+                    if (newConv) {
+                        await supabase.from('conversation_participants').insert([
+                            { conversation_id: newConv.id, user_id: user.id },
+                            { conversation_id: newConv.id, user_id: selectedUserId }
+                        ]);
+                        setSelectedConversation(newConv.id);
+                        await fetchConversations();
+                    }
+                } else {
+                    alert(`Error: ${error.message || 'Unknown error'}`);
+                }
             } finally {
                 setInitializingChat(false);
             }
@@ -249,6 +263,45 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
         findOrCreateConversation();
     }, [selectedUserId, user]);
+
+    const deleteConversation = async (conversationId: string) => {
+        if (!confirm(language === 'en' ? 'Delete this conversation?' : '¿Borrar esta conversación?')) return;
+
+        try {
+            // 1. Delete all messages in the conversation
+            const { error: msgError } = await supabase
+                .from('messages')
+                .delete()
+                .eq('conversation_id', conversationId);
+
+            if (msgError) throw msgError;
+
+            // 2. Delete all participants
+            const { error: partError } = await supabase
+                .from('conversation_participants')
+                .delete()
+                .eq('conversation_id', conversationId);
+
+            if (partError) throw partError;
+
+            // 3. Finally delete the conversation itself
+            const { error: convError } = await supabase
+                .from('conversations')
+                .delete()
+                .eq('id', conversationId);
+
+            if (convError) throw convError;
+
+            // Update local state
+            setConversations(prev => prev.filter(c => c.id !== conversationId));
+            if (selectedConversation === conversationId) {
+                setSelectedConversation(null);
+            }
+        } catch (error) {
+            console.error('Error deleting conversation:', error);
+            alert('Error al eliminar la conversación. Asegúrate de tener permisos.');
+        }
+    };
 
     const isMarkingRead = useRef<boolean>(false);
 
@@ -436,12 +489,7 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
             {/* Header */}
             <header className="sticky top-0 z-40 shrink-0 flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#e7f3ed] dark:border-gray-800 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-6 py-4 lg:px-20">
                 <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onNavigate('Landing')}>
-                    <div className="size-8 text-primary flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-                        <span className="material-symbols-outlined !text-3xl">hiking</span>
-                    </div>
-                    <h2 className="text-[#0e1b14] dark:text-white text-xl font-black leading-tight tracking-tight">
-                        MyCamino
-                    </h2>
+                    <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
                 </div>
                 <button onClick={() => onNavigate('Landing')} className="text-sm font-bold text-primary hover:underline">
                     {language === 'en' ? 'Back' : language === 'es' ? 'Volver' : 'Back'}
@@ -506,11 +554,22 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                                             {conv.last_message?.content || 'Start a conversation'}
                                         </p>
                                     </div>
-                                    {conv.unread_count > 0 && (
-                                        <div className="size-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-black">
-                                            {conv.unread_count}
-                                        </div>
-                                    )}
+                                    <div className="flex flex-col items-end gap-1">
+                                        {conv.unread_count > 0 && (
+                                            <div className="size-6 rounded-full bg-primary flex items-center justify-center text-white text-xs font-black">
+                                                {conv.unread_count}
+                                            </div>
+                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteConversation(conv.id);
+                                            }}
+                                            className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">delete</span>
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -549,7 +608,7 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                                         {headerName}
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        @{headerUsername || 'usuario'}
+                                        {headerUsername ? (headerUsername.startsWith('@') ? headerUsername : `@${headerUsername}`) : '@usuario'}
                                     </p>
                                 </div>
                             </div>

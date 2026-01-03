@@ -25,10 +25,7 @@ const BusinessProfile = ({ onNavigate }: Props) => {
                         <span className="material-symbols-outlined">menu</span>
                     </button>
                     <div className="flex items-center gap-2" onClick={() => onNavigate('Landing')}>
-                        <div className="size-8 text-primary">
-                            <span className="material-symbols-outlined text-3xl">hiking</span>
-                        </div>
-                        <h2 className="text-xl font-bold leading-tight tracking-[-0.015em]">MyCamino</h2>
+                        <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
                     </div>
                 </div>
                 <div className="flex flex-1 justify-end items-center gap-6">

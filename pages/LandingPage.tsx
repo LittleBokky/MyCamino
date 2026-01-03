@@ -72,10 +72,27 @@ const ImageModal = ({ src, isOpen, onClose }: { src: string, isOpen: boolean, on
   );
 };
 
+const HERO_IMAGES = [
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuAVJlSAboTqT1_wZOQAO37-WTKQzvNgtXmZEcKozd-Xuz_XIp8EOUY1zKMiXvyyEFtqR47pVLrRyh9H3iD8us0XK8FqSNWHWC9NHyTxFdDfZQf7O5qMVK50wxryLyRXl6aNTrYxBi1ILLRqP7KBUj0DyVL7CYTpHFXMZGrzPeufiH8ij2zPFL5QCTjRRcyaXL4EN6aroGmWFXR-PT0WYnvXcuhgatSG9_QKOTKVyrWxas8KQOLgmQlO401YDxYhBB-zfkZEj8tWFiM',
+  '/hero_carousel_1.jpg',
+  '/hero_carousel_2.jpg',
+  '/hero_carousel_3.jpg',
+  '/hero_carousel_4.jpg'
+];
+
 const LandingPage = ({
   onNavigate, language, setLanguage, openAuth, user, onSignOut,
   notifications, unreadCount, showNotifications, setShowNotifications, markAllAsRead
 }: Props) => {
+  const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentHeroIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pilgrims, setPilgrims] = useState<Pilgrim[]>([]);
@@ -195,6 +212,16 @@ const LandingPage = ({
     voicesDesc: trans('voicesDesc', language),
     ctaTitle: trans('ctaTitle', language),
     ctaSub: trans('ctaSub', language),
+    footerDesc: trans('footerDesc', language),
+    platform: trans('platform', language),
+    planTrip: trans('planTrip', language),
+    interactiveMap: trans('interactiveMap', language),
+    albergueDir: trans('albergueDir', language),
+    forum: trans('forum', language),
+    events: trans('events', language),
+    stories: trans('stories', language),
+    connect: trans('connect', language),
+    footerRights: trans('footerRights', language),
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -298,12 +325,7 @@ const LandingPage = ({
       <header className="sticky top-0 z-50 flex flex-col whitespace-nowrap border-b border-solid border-b-[#e7f3ed] dark:border-gray-800 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-6 py-4 lg:px-20">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onNavigate('Landing')}>
-            <div className="size-8 text-primary flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-              <span className="material-symbols-outlined !text-3xl">hiking</span>
-            </div>
-            <h2 className="text-[#0e1b14] dark:text-white text-xl font-black leading-tight tracking-tight">
-              MyCamino
-            </h2>
+            <img src="/navbar_logo.png" alt="MyCamino" className="h-12 w-auto object-contain" />
           </div>
           <div className="hidden lg:flex items-center gap-6">
             <nav className="flex items-center gap-6">
@@ -826,27 +848,44 @@ const LandingPage = ({
       </header>
 
       {/* Hero Section */}
-      <div className="w-full overflow-hidden">
-        <div className="@container">
+      <div className="w-full overflow-hidden relative min-h-[620px]">
+        {/* Carousel Backgrounds */}
+        {HERO_IMAGES.map((img, idx) => (
           <div
-            className="relative flex min-h-[620px] flex-col gap-6 items-center justify-center p-8 text-center bg-cover bg-center transition-all duration-700"
+            key={img}
+            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${idx === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`}
             style={{
-              backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuAVJlSAboTqT1_wZOQAO37-WTKQzvNgtXmZEcKozd-Xuz_XIp8EOUY1zKMiXvyyEFtqR47pVLrRyh9H3iD8us0XK8FqSNWHWC9NHyTxFdDfZQf7O5qMVK50wxryLyRXl6aNTrYxBi1ILLRqP7KBUj0DyVL7CYTpHFXMZGrzPeufiH8ij2zPFL5QCTjRRcyaXL4EN6aroGmWFXR-PT0WYnvXcuhgatSG9_QKOTKVyrWxas8KQOLgmQlO401YDxYhBB-zfkZEj8tWFiM")'
+              backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%), url("${img}")`
             }}
-          >
-            <div className="flex flex-col gap-4 max-w-4xl z-10 animate-fade-in">
-              <h1 className="text-white text-5xl font-black leading-tight tracking-[-0.04em] md:text-7xl drop-shadow-lg">
-                {t.heroTitle} <br className="hidden md:block" /> {t.heroTitleAccent}
-              </h1>
-              <h2 className="text-gray-200 text-lg font-medium leading-relaxed md:text-2xl max-w-2xl mx-auto opacity-90">
-                {t.heroSubtitle}
-              </h2>
-            </div>
-            <div className="flex justify-center mt-6 z-10 w-full max-w-lg animate-slide-up" style={{ animationDelay: '0.2s' }}>
-              <button onClick={() => onNavigate('Packs')} className="min-w-[280px] cursor-pointer items-center justify-center rounded-xl h-14 px-8 bg-primary hover:bg-primary-dark text-white text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-105 active:scale-95">
-                {t.plan}
-              </button>
-            </div>
+          />
+        ))}
+
+        {/* Content Overlay */}
+        <div className="relative z-10 flex min-h-[620px] flex-col gap-6 items-center justify-center p-8 text-center @container">
+          <div className="flex flex-col gap-4 max-w-4xl animate-fade-in">
+            <h1 className="text-white text-5xl font-black leading-tight tracking-[-0.04em] md:text-7xl drop-shadow-lg">
+              {t.heroTitle} <br className="hidden md:block" /> {t.heroTitleAccent}
+            </h1>
+            <h2 className="text-gray-200 text-lg font-medium leading-relaxed md:text-2xl max-w-2xl mx-auto opacity-90">
+              {t.heroSubtitle}
+            </h2>
+          </div>
+          <div className="flex justify-center mt-6 w-full max-w-lg animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <button onClick={() => onNavigate('Packs')} className="min-w-[280px] cursor-pointer items-center justify-center rounded-xl h-14 px-8 bg-primary hover:bg-primary-dark text-white text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-105 active:scale-95">
+              {t.plan}
+            </button>
+          </div>
+
+          {/* Carousel Dots */}
+          <div className="absolute bottom-8 flex gap-2">
+            {HERO_IMAGES.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentHeroIndex(idx)}
+                className={`h-2 rounded-full transition-all duration-300 shadow-sm ${idx === currentHeroIndex ? 'w-8 bg-primary' : 'w-2 bg-white/50 hover:bg-white/80'}`}
+                aria-label={`View slide ${idx + 1}`}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -893,39 +932,7 @@ const LandingPage = ({
         </div>
       </section>
 
-      {/* Community Section (Voices) */}
-      <section className="flex justify-center py-24 px-4 md:px-10 lg:px-20 bg-white dark:bg-[#0c1811] border-t border-border-light dark:border-gray-800">
-        <div className="flex flex-col max-w-[1000px] flex-1 gap-12">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-[#0e1b14] dark:text-white text-4xl font-black tracking-tight">
-              {t.voicesTitle}
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-lg">{t.voicesSub}</p>
-          </div>
-          <div className="flex overflow-x-auto gap-8 pb-10 no-scrollbar snap-x cursor-grab active:cursor-grabbing">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="min-w-[300px] md:min-w-[360px] snap-center flex flex-col gap-6 rounded-2xl bg-surface-light dark:bg-surface-dark p-6 shadow-sm border border-transparent hover:border-primary/20 transition-all duration-300 group hover:shadow-xl">
-                <div className="w-full aspect-[16/10] rounded-xl bg-gray-200 bg-cover bg-center overflow-hidden" style={{ backgroundImage: i === 1 ? 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBJknsXL1ESTgdPFJIQPdZXx9KfmUf41AgpVmOx5L70nLrbeEXWNstQvHrZuzOVpLFfSYtig1bndfzugyqnb3RUhVDUmKqnnpNs0w89F8AC8Z5W33x7QszkHLYBVkPOUP8BmT6sOzh838ihEy40lCWJ1rL-3qw_UtwwX4T2t1Xa0aZmARLhYAgSW5WRRaU7oDsh9cNUPlAQdtIkztlg02yQR5VmNFyKJRBEn6YkLyfEZT0ttDP7mGK7_eb0928n97xYZMbSl6epiaw")' : i === 2 ? 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDKyR4GPY7nt7A8JRtgm51sstm-8cub88q_PM2r6CjlumXE3Lq4MpWG8fA2WE_XKW9oWedb6ft66FxmPQyYEQledUB8hpJ1bshk1Gw_zchATXU-45hZeKM5BRAYR6co9zFBKWkfgqd_te5m2nkN3WHV4Kq5V2ABe-q-5TaJ9BvzmYabPisdsAyZI61EgIEJBtGg8V-KylmdKPVw9M2OpUPUDvtFq6D01qWuBA4iANJw7j6qRf8CbFHZg0sHeZMKlU4UDkmUc3jmiqE")' : 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCDrloFTtQF1e31XfKK7Sy0vSexp82XKbB6AH1kA74YvwE28MSWbGuXz3GvU2wcchyLTKA6Tiwexr6MFVjpYlLYgiJxpebIWW07zVdFsmeUgvbwVSgQpjlJzgp2ehXYKF3UtXQvcg55OkDsuVMTx3FyzGU5qgLrYA5lKOEWSKI-OBR3au_KqN6IDBMTkgzbIdfKsP_wYMTj_fujnBqfXjC91eGSIsfT1dtPKLae0LrfnUTqBwpm6GVw5BHdzOizCcR31yudCrYMtNA")' }}>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="bg-primary/10 text-primary text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-widest">
-                      {i === 1 ? t.story : i === 2 ? t.pro : t.event}
-                    </span>
-                  </div>
-                  <h4 className="text-[#0e1b14] dark:text-white text-xl font-black group-hover:text-primary transition-colors">
-                    {i === 1 ? t.storyTitle : i === 2 ? t.proTitle : t.eventTitle}
-                  </h4>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 line-clamp-2">{t.voicesDesc}</p>
-                  <button className="mt-4 flex items-center gap-1 text-primary text-sm font-bold group-hover:gap-2 transition-all">
-                    {t.readMore} <span className="material-symbols-outlined text-sm">arrow_right_alt</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
       {/* CTA Section */}
       <section className="py-24 px-6 bg-[#0e1b14] text-white text-center relative overflow-hidden">
@@ -948,30 +955,29 @@ const LandingPage = ({
       <footer className="bg-background-light dark:bg-background-dark py-16 px-6 lg:px-20 border-t border-border-light dark:border-gray-800">
         <div className="max-w-[1000px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
           <div className="flex flex-col gap-6 col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 text-primary cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onNavigate('Landing')}>
-              <span className="material-symbols-outlined !text-3xl">hiking</span>
-              <span className="font-black text-xl text-[#0e1b14] dark:text-white tracking-tighter">MyCamino</span>
+            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onNavigate('Landing')}>
+              <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
             </div>
-            <p className="text-sm text-gray-500 leading-relaxed">Your digital credential and compass for the modern pilgrimage.</p>
+            <p className="text-sm text-gray-500 leading-relaxed">{t.footerDesc}</p>
           </div>
           <div className="flex flex-col gap-4">
-            <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">Platform</h4>
+            <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">{t.platform}</h4>
             <div className="flex flex-col gap-2">
-              {['Plan Your Trip', 'Interactive Map', 'Albergue Directory'].map(link => (
-                <button key={link} onClick={() => onNavigate('Planner')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{link}</button>
-              ))}
+              <button onClick={() => onNavigate('Packs')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{t.planTrip}</button>
+              <button onClick={() => onNavigate('Planner')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{t.interactiveMap}</button>
+              <button onClick={() => onNavigate('Planner')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{t.albergueDir}</button>
             </div>
           </div>
           <div className="flex flex-col gap-4">
-            <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">Community</h4>
+            <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">{t.community}</h4>
             <div className="flex flex-col gap-2">
-              {['Forum', 'Events', 'Stories'].map(link => (
-                <button key={link} onClick={() => onNavigate('Community')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{link}</button>
-              ))}
+              <button onClick={() => onNavigate('Community')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{t.forum}</button>
+              <button onClick={() => onNavigate('Community')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{t.events}</button>
+              <button onClick={() => onNavigate('Community')} className="text-left text-sm text-gray-500 hover:text-primary transition-colors">{t.stories}</button>
             </div>
           </div>
           <div className="flex flex-col gap-4">
-            <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">Connect</h4>
+            <h4 className="font-black text-[#0e1b14] dark:text-white uppercase text-xs tracking-widest">{t.connect}</h4>
             <div className="flex gap-4">
               <a href="#" className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-primary hover:text-white transition-all transform hover:-translate-y-1">
                 <span className="material-symbols-outlined !text-xl">public</span>
@@ -983,7 +989,7 @@ const LandingPage = ({
           </div>
         </div>
         <div className="max-w-[1000px] mx-auto pt-8 border-t border-gray-200 dark:border-gray-800 text-center md:text-left">
-          <p className="text-xs text-gray-400 font-medium">© 2024 MyCamino. Built for pilgrims, by pilgrims. Buen Camino.</p>
+          <p className="text-xs text-gray-400 font-medium">© 2026 MyCamino. {t.footerRights}</p>
         </div>
       </footer>
       <ImageModal

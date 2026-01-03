@@ -18,10 +18,7 @@ const StageDetails = ({ onNavigate }: Props) => {
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-8">
                         <div className="flex items-center gap-4 cursor-pointer" onClick={() => onNavigate('Landing')}>
-                            <div className="size-8 text-primary">
-                                <span className="material-symbols-outlined text-4xl">hiking</span>
-                            </div>
-                            <h2 className="text-lg font-bold">MyCamino</h2>
+                            <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
                         </div>
                         <div className="hidden md:flex items-center gap-9">
                             <button onClick={() => onNavigate('Planner')} className="text-sm font-medium hover:text-primary transition-colors">Plan</button>

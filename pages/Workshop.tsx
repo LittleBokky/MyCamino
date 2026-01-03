@@ -16,11 +16,9 @@ const Workshop = ({ onNavigate }: Props) => {
     return (
         <div className="bg-background-light dark:bg-background-dark text-text-main dark:text-white font-display h-screen flex flex-col overflow-hidden">
             <header className="flex-none flex items-center justify-between whitespace-nowrap border-b border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark px-6 py-3 z-20 shadow-sm">
-                <div className="flex items-center gap-4 text-text-main dark:text-white cursor-pointer" onClick={() => onNavigate('Landing')}>
-                    <div className="size-8 flex items-center justify-center text-primary">
-                        <span className="material-symbols-outlined text-3xl">hiking</span>
-                    </div>
-                    <h2 className="text-text-main dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">MyCamino Workshop</h2>
+                <div className="flex items-center gap-2 text-text-main dark:text-white cursor-pointer" onClick={() => onNavigate('Landing')}>
+                    <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
+                    <h2 className="text-text-main dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] ml-1">Workshop</h2>
                 </div>
                 <div className="flex flex-1 justify-end gap-8">
                     <nav className="hidden md:flex items-center gap-6">

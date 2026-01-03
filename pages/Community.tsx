@@ -886,8 +886,7 @@ const Community = ({
       <header className="sticky top-0 z-50 bg-surface-light/90 dark:bg-surface-dark/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onNavigate('Landing')}>
-            <span className="material-symbols-outlined text-primary text-3xl transition-transform group-hover:scale-110">hiking</span>
-            <span className="text-xl font-black text-slate-900 dark:text-white">MyCamino</span>
+            <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
           </div>
           <nav className="hidden md:flex items-center gap-8 px-6">
             {user && (
@@ -1200,7 +1199,9 @@ const Community = ({
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="truncate max-w-[100px]">@{p.username}</span>
+                        <span className="truncate max-w-[100px]">
+                          {p.username?.startsWith('@') ? p.username : `@${p.username}`}
+                        </span>
                         <span className="size-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
                         <span className="truncate">{p.way}</span>
                       </div>

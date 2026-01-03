@@ -584,6 +584,45 @@ const Credential = ({
     const [selectedFullImage, setSelectedFullImage] = useState<string | null>(null);
     const [mutualFriends, setMutualFriends] = useState<{ name: string, avatar: string, total: number } | null>(null);
 
+    // Edit Profile State
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [editForm, setEditForm] = useState({
+        full_name: '',
+        username: '',
+        bio: ''
+    });
+
+    const handleEditClick = () => {
+        setEditForm({
+            full_name: profile?.full_name || user?.user_metadata?.full_name || '',
+            username: profile?.username || user?.user_metadata?.username || '',
+            bio: profile?.bio || ''
+        });
+        setIsEditingProfile(true);
+    };
+
+    const handleSaveProfile = async () => {
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: editForm.full_name,
+                    username: editForm.username,
+                    bio: editForm.bio,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+
+            if (error) throw error;
+            setIsEditingProfile(false);
+            setProfile({ ...profile, ...editForm });
+            alert('Perfil actualizado correctamente');
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            alert('Error al actualizar el perfil');
+        }
+    };
+
 
     useEffect(() => {
         const fetchResults = async () => {
@@ -951,8 +990,7 @@ const Credential = ({
                     <div className="flex h-16 items-center justify-between">
                         <div className="flex items-center gap-8">
                             <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('Landing')}>
-                                <span className="material-symbols-outlined text-4xl text-primary">hiking</span>
-                                <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">MyCamino</h2>
+                                <img src="/navbar_logo.png" alt="MyCamino" className="h-12 w-auto object-contain" />
                             </div>
                             <nav className="hidden md:flex items-center gap-6 pr-4">
                                 <button onClick={() => onNavigate('Landing')} className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary transition-colors">{language === 'en' ? 'Home' : 'Inicio'}</button>
@@ -1199,7 +1237,10 @@ const Credential = ({
                             <div className="flex gap-2">
                                 {isOwnProfile ? (
                                     <>
-                                        <button className="px-5 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        <button
+                                            onClick={handleEditClick}
+                                            className="px-5 py-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                        >
                                             {t.editProfile}
                                         </button>
                                         <button className="p-1.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -1466,8 +1507,6 @@ const Credential = ({
                                 ) : (
                                     <div className="flex flex-col items-center py-16 text-center">
                                         <span className="material-symbols-outlined text-5xl text-slate-200 dark:text-slate-800 mb-4 text-slate-300">person_search</span>
-                                        <p className="text-slate-400 font-bold">No hay nadie aquí todavía</p>
-                                        <p className="text-slate-300 dark:text-slate-600 text-xs mt-1 italic">¡Empieza a conectar con otros peregrinos!</p>
                                     </div>
                                 )}
                             </div>
@@ -1475,6 +1514,63 @@ const Credential = ({
                     </div>
                 )}
             </main>
+
+            {/* Edit Profile Modal */}
+            {isEditingProfile && (
+                <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-surface-dark w-full max-w-md rounded-3xl p-8 shadow-2xl animate-fade-in relative">
+                        <button
+                            onClick={() => setIsEditingProfile(false)}
+                            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                        >
+                            <span className="material-symbols-outlined">close</span>
+                        </button>
+
+                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-6 text-center">{t.editProfile}</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-1">Nombre Completo</label>
+                                <input
+                                    type="text"
+                                    value={editForm.full_name}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, full_name: e.target.value }))}
+                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-bold"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-1">Usuario</label>
+                                <input
+                                    type="text"
+                                    value={editForm.username}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-bold"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-1">Biografía</label>
+                                <textarea
+                                    value={editForm.bio}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                                    rows={4}
+                                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all resize-none text-sm"
+                                    placeholder="Cuéntanos sobre tu camino..."
+                                />
+                            </div>
+
+                            <button
+                                onClick={handleSaveProfile}
+                                className="w-full py-4 bg-primary hover:bg-primary-dark text-white font-black rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 mt-4"
+                            >
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Route Detail Modal - Instagram Style */}
             {selectedRoute && (

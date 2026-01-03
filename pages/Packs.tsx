@@ -34,12 +34,7 @@ const Packs = ({ onNavigate, language, setLanguage, user, onSignOut }: Props) =>
             <header className="sticky top-0 z-50 flex flex-col whitespace-nowrap border-b border-solid border-b-[#e7f3ed] dark:border-gray-800 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm px-6 py-4 lg:px-20">
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onNavigate('Landing')}>
-                        <div className="size-8 text-primary flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-                            <span className="material-symbols-outlined !text-3xl">hiking</span>
-                        </div>
-                        <h2 className="text-[#0e1b14] dark:text-white text-xl font-black leading-tight tracking-tight">
-                            MyCamino
-                        </h2>
+                        <img src="/navbar_logo.png" alt="MyCamino" className="h-10 w-auto object-contain" />
                     </div>
                     <div className="flex items-center gap-6">
                         <button
