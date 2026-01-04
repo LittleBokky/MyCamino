@@ -332,14 +332,16 @@ const LandingPage = ({
               <button onClick={() => onNavigate('Landing')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.home}</button>
               <button onClick={() => onNavigate('Planner')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.map}</button>
               <button onClick={() => onNavigate('Community')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.community}</button>
-              <button onClick={() => onNavigate('Live')} className="nav-link text-primary dark:text-primary text-sm font-bold transition-colors flex items-center gap-1 group">
-                <span className="size-2 bg-primary rounded-full animate-pulse"></span>
-                {language === 'en' ? 'Live' : 'En vivo'}
-              </button>
               {user && (
-                <button onClick={() => onNavigate('Chat')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors flex items-center gap-1">
-                  {t.chat}
-                </button>
+                <>
+                  <button onClick={() => onNavigate('Live')} className="flex items-center gap-2 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full text-[11px] font-black tracking-tight transition-all hover:scale-105 active:scale-95 shadow-lg shadow-red-500/20 group ml-2 whitespace-nowrap">
+                    <span className="size-2 bg-white rounded-full animate-pulse"></span>
+                    {language === 'en' ? 'START ROUTE' : 'EMPEZAR RUTA'}
+                  </button>
+                  <button onClick={() => onNavigate('Chat')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors flex items-center gap-1">
+                    {t.chat}
+                  </button>
+                </>
               )}
               <button onClick={() => onNavigate('Contact')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{language === 'en' ? 'Contact' : 'Contacto'}</button>
             </nav>
@@ -824,21 +826,13 @@ const LandingPage = ({
             </div>
 
             <button onClick={() => { onNavigate('Landing'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.home}</button>
-            <button onClick={() => { onNavigate('Planner'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.map}</button>
-            <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="nav-link text-left px-4 py-2 text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">
+            <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">
               {t.community}
             </button>
-            <button onClick={() => { onNavigate('Live'); setIsMobileMenuOpen(false); }} className="nav-link text-left px-4 py-2 text-primary dark:text-primary text-sm font-bold transition-colors flex items-center gap-2">
-              <span className="size-2 bg-primary rounded-full animate-pulse"></span>
-              {language === 'en' ? 'Live Tracking' : 'Seguimiento en Vivo'}
-            </button>
-            {user && (
-              <button onClick={() => { onNavigate('Chat'); setIsMobileMenuOpen(false); }} className="nav-link text-left px-4 py-2 text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">
-                {t.chat}
-              </button>
-            )}
             <button onClick={() => { onNavigate('Contact'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{language === 'en' ? 'Contact' : 'Contacto'}</button>
+
             <div className="h-px bg-gray-100 dark:bg-gray-800 my-1"></div>
+
             {user ? (
               <>
                 <button onClick={() => { onNavigate('Credential'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.dashboardGo}</button>
@@ -856,21 +850,24 @@ const LandingPage = ({
               </>
             )}
           </div>
-        )}
-      </header>
+        )
+        }
+      </header >
 
       {/* Hero Section */}
-      <div className="w-full overflow-hidden relative min-h-[620px]">
+      < div className="w-full overflow-hidden relative min-h-[620px]" >
         {/* Carousel Backgrounds */}
-        {HERO_IMAGES.map((img, idx) => (
-          <div
-            key={img}
-            className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${idx === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`}
-            style={{
-              backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%), url("${img}")`
-            }}
-          />
-        ))}
+        {
+          HERO_IMAGES.map((img, idx) => (
+            <div
+              key={img}
+              className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${idx === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`}
+              style={{
+                backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%), url("${img}")`
+              }}
+            />
+          ))
+        }
 
         {/* Content Overlay */}
         <div className="relative z-10 flex min-h-[620px] flex-col gap-6 items-center justify-center p-8 text-center @container">
@@ -900,12 +897,12 @@ const LandingPage = ({
             ))}
           </div>
         </div>
-      </div>
+      </div >
 
 
 
       {/* Routes */}
-      <section className="flex justify-center py-24 px-4 md:px-10 lg:px-20 bg-background-light dark:bg-background-dark">
+      < section className="flex justify-center py-24 px-4 md:px-10 lg:px-20 bg-background-light dark:bg-background-dark" >
         <div className="flex flex-col max-w-[1000px] flex-1 gap-12">
           <div className="flex flex-col gap-4">
             <h2 className="text-[#0e1b14] dark:text-white text-4xl font-black leading-tight tracking-tight">
@@ -942,12 +939,12 @@ const LandingPage = ({
             </div>
           </div>
         </div>
-      </section>
+      </section >
 
 
 
       {/* CTA Section */}
-      <section className="py-24 px-6 bg-[#0e1b14] text-white text-center relative overflow-hidden">
+      < section className="py-24 px-6 bg-[#0e1b14] text-white text-center relative overflow-hidden" >
         <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[60%] bg-primary rounded-full blur-[120px]"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[60%] bg-primary rounded-full blur-[120px]"></div>
@@ -961,10 +958,10 @@ const LandingPage = ({
             </button>
           </div>
         </div>
-      </section>
+      </section >
 
       {/* Footer */}
-      <footer className="bg-background-light dark:bg-background-dark py-16 px-6 lg:px-20 border-t border-border-light dark:border-gray-800">
+      < footer className="bg-background-light dark:bg-background-dark py-16 px-6 lg:px-20 border-t border-border-light dark:border-gray-800" >
         <div className="max-w-[1000px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
           <div className="flex flex-col gap-6 col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onNavigate('Landing')}>
@@ -1003,13 +1000,13 @@ const LandingPage = ({
         <div className="max-w-[1000px] mx-auto pt-8 border-t border-gray-200 dark:border-gray-800 text-center md:text-left">
           <p className="text-xs text-gray-400 font-medium">© 2026 MyCamino. {t.footerRights}</p>
         </div>
-      </footer>
+      </footer >
       <ImageModal
         src={selectedImage || ''}
         isOpen={!!selectedImage}
         onClose={() => setSelectedImage(null)}
       />
-    </div>
+    </div >
   );
 };
 

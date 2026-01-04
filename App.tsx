@@ -414,9 +414,46 @@ export default function App() {
 
 
       {/* Page Transition Wrapper */}
-      <div key={animationKey} className="page-enter flex-1 flex flex-col">
+      <div key={animationKey} className="page-enter flex-1 flex flex-col pb-24 lg:pb-0">
         {renderView()}
       </div>
+
+      {/* Persistent Mobile Bottom Navbar */}
+      {session?.user && (
+        <div className="lg:hidden fixed bottom-4 inset-x-6 z-[100000] animate-slide-up">
+          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-800/50 rounded-2xl shadow-[0_15px_35px_-10px_rgba(0,0,0,0.25)] px-5 py-2 flex items-center justify-between">
+            <button
+              onClick={() => handleNavigate('Planner')}
+              className="flex flex-col items-center gap-0.5 group transition-all active:scale-90"
+            >
+              <div className="size-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-primary/20 group-hover:text-primary transition-colors">
+                <span className="material-symbols-outlined !text-[20px]">map</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-tight text-slate-400 group-hover:text-primary transition-colors">Mapas</span>
+            </button>
+
+            <button
+              onClick={() => handleNavigate('Live')}
+              className="flex flex-col items-center gap-0.5 group -mt-7 transition-all active:scale-90"
+            >
+              <div className="size-12 rounded-full bg-red-500 flex items-center justify-center text-white shadow-xl shadow-red-500/30 border-4 border-white/20 dark:border-slate-900/50 group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined !text-[24px] animate-pulse">sensors</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-tight text-red-500">Ruta</span>
+            </button>
+
+            <button
+              onClick={() => handleNavigate('Chat')}
+              className="flex flex-col items-center gap-0.5 group transition-all active:scale-90"
+            >
+              <div className="size-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-primary/20 group-hover:text-primary transition-colors">
+                <span className="material-symbols-outlined !text-[20px]">chat</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-tight text-slate-400 group-hover:text-primary transition-colors">Chat</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
