@@ -419,7 +419,7 @@ export default function App() {
       </div>
 
       {/* Persistent Mobile Bottom Navbar */}
-      {session?.user && (
+      {session?.user && !['Community', 'Chat', 'Contact', 'Credential', 'Live'].includes(currentView) && (
         <div className="lg:hidden fixed bottom-4 inset-x-6 z-[100000] animate-slide-up">
           <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-800/50 rounded-2xl shadow-[0_15px_35px_-10px_rgba(0,0,0,0.25)] px-5 py-2 flex items-center justify-between">
             <button
