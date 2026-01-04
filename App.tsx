@@ -11,10 +11,11 @@ import Community from './pages/Community';
 import Packs from './pages/Packs';
 import Contact from './pages/Contact';
 import Chat from './pages/Chat';
+import LiveTracker from './pages/LiveTracker';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
-export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community' | 'Packs' | 'Contact' | 'Pro Dashboard' | 'Biz Profile' | 'Workshop' | 'Stage Details' | 'Chat';
+export type ViewName = 'Landing' | 'Credential' | 'Planner' | 'Community' | 'Packs' | 'Contact' | 'Pro Dashboard' | 'Biz Profile' | 'Workshop' | 'Stage Details' | 'Chat' | 'Live';
 export type Language = 'en' | 'es' | 'pt' | 'fr' | 'de' | 'it' | 'zh' | 'ja';
 export type AuthMode = 'login' | 'register';
 
@@ -200,6 +201,7 @@ export default function App() {
       case 'Biz Profile': return <BusinessProfile {...pageProps} />;
       case 'Workshop': return <Workshop {...pageProps} />;
       case 'Stage Details': return <StageDetails {...pageProps} />;
+      case 'Live': return <LiveTracker {...pageProps} />;
       default: return <LandingPage {...pageProps} />;
     }
   };

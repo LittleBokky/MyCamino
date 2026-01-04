@@ -19,12 +19,20 @@ interface Conversation {
     id: string;
     created_at: string;
     updated_at: string;
+    name?: string | null;
+    is_group?: boolean;
+    avatar_url?: string | null;
     other_user?: {
         id: string;
         full_name: string;
         avatar_url: string;
         username: string;
     };
+    participants?: {
+        id: string;
+        full_name: string;
+        avatar_url: string;
+    }[];
     last_message?: Message;
     unread_count: number;
 }
@@ -45,8 +53,17 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [initializingChat, setInitializingChat] = useState(false);
-    // User profile of the person currently selected (fetched directly if not in list yet)
     const [selectedUserProfile, setSelectedUserProfile] = useState<any>(null);
+
+    // Group Chat State
+    const [showCreateGroup, setShowCreateGroup] = useState(false);
+    const [groupName, setGroupName] = useState('');
+    const [selectedGroupUsers, setSelectedGroupUsers] = useState<string[]>([]);
+    const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+    const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+    const [showMembersModal, setShowMembersModal] = useState(false);
+    const [typingUser, setTypingUser] = useState<string | null>(null);
+    const typingTimeoutRef = useRef<any>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const selectedConversationRef = useRef<string | null>(null);
@@ -87,58 +104,79 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                   conversations (
                     id,
                     created_at,
-                    updated_at
+                    updated_at,
+                    name,
+                    is_group,
+                    avatar_url
                   )
                 `)
                 .eq('user_id', user.id);
 
             if (error) throw error;
 
-            // Get other participants using Promise.all
+            // Get participants and details using Promise.all
             const conversationsWithUsers = await Promise.all(
-                convData.map(async (conv: any) => {
+                (convData || []).map(async (convDetail: any) => {
+                    const conv = convDetail.conversations;
+                    if (!conv) return null;
+
                     const { data: participants } = await supabase
                         .from('conversation_participants')
                         .select('user_id, profiles(id, full_name, avatar_url, username)')
-                        .eq('conversation_id', conv.conversation_id)
-                        .neq('user_id', user.id)
-                        .single();
+                        .eq('conversation_id', conv.id);
 
-                    const { data: lastMsg } = await supabase
+                    // Helper to normalize Supabase join results
+                    const getProfile = (p: any) => Array.isArray(p?.profiles) ? p.profiles[0] : p?.profiles;
+
+                    const allParticipants = (participants || []).map(getProfile).filter(Boolean);
+                    const otherParticipants = allParticipants.filter((p: any) => p.id !== user.id);
+                    const isGroup = conv.is_group || allParticipants.length > 2;
+
+                    const lastMsgQuery = await supabase
                         .from('messages')
                         .select('*')
-                        .eq('conversation_id', conv.conversation_id)
+                        .eq('conversation_id', conv.id)
                         .order('created_at', { ascending: false })
                         .limit(1)
                         .maybeSingle();
+                    const lastMsg = lastMsgQuery.data;
 
                     const { count: unreadCount } = await supabase
                         .from('messages')
                         .select('*', { count: 'exact', head: true })
-                        .eq('conversation_id', conv.conversation_id)
+                        .eq('conversation_id', conv.id)
                         .eq('read', false)
                         .neq('sender_id', user.id);
 
                     return {
-                        id: conv.conversations.id,
-                        created_at: conv.conversations.created_at,
-                        updated_at: conv.conversations.updated_at,
-                        other_user: participants?.profiles,
+                        id: conv.id,
+                        created_at: conv.created_at,
+                        updated_at: conv.updated_at,
+                        name: conv.name,
+                        is_group: isGroup,
+                        avatar_url: conv.avatar_url,
+                        other_user: !isGroup && otherParticipants.length === 1 ? otherParticipants[0] : null,
+                        participants: allParticipants,
                         last_message: lastMsg,
                         unread_count: unreadCount || 0,
                     };
                 })
             );
 
-            setConversations(conversationsWithUsers.sort((a, b) =>
+            const filteredConvs = conversationsWithUsers.filter(c => c !== null) as Conversation[];
+
+            setConversations(filteredConvs.sort((a, b) =>
                 new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
             ).map(conv => ({
                 ...conv,
-                // Force 0 unread if this conversation is open OR has been opened recently
                 unread_count: (conv.id === selectedConversationRef.current || clearedConversations.has(conv.id)) ? 0 : conv.unread_count
             })));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching conversations:', error);
+            // If it's a column missing error, it's likely the SQL hasn't been run
+            if (error?.code === '42703') {
+                console.error('Database columns missing. Please run the SQL migration for name and is_group.');
+            }
         } finally {
             setLoading(false);
         }
@@ -303,6 +341,61 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
         }
     };
 
+    const fetchAvailableUsers = async () => {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, username')
+            .neq('id', user.id)
+            .limit(50);
+
+        if (!error && data) {
+            setAvailableUsers(data);
+        }
+    };
+
+    useEffect(() => {
+        if (showCreateGroup) {
+            fetchAvailableUsers();
+        }
+    }, [showCreateGroup]);
+
+    const handleCreateGroupChat = async () => {
+        if (!groupName.trim() || selectedGroupUsers.length === 0) {
+            alert(language === 'en' ? 'Please provide a name and select at least one participant.' : 'Por favor, introduce un nombre y selecciona al menos un participante.');
+            return;
+        }
+
+        setIsCreatingGroup(true);
+        try {
+            // Use RPC for atomic creation of group and participants
+            const { data: newConvId, error } = await supabase.rpc('create_group_conversation', {
+                p_name: groupName.trim(),
+                p_participant_ids: selectedGroupUsers
+            });
+
+            if (error) throw error;
+            if (!newConvId) throw new Error('No conversation ID returned');
+
+            // Success
+            setGroupName('');
+            setSelectedGroupUsers([]);
+            setShowCreateGroup(false);
+            setSelectedConversation(newConvId);
+            await fetchConversations();
+        } catch (error: any) {
+            console.error('Error creating group:', error);
+            alert(`Error: ${error.message || 'Check your database permissions/RPC'}`);
+        } finally {
+            setIsCreatingGroup(false);
+        }
+    };
+
+    const toggleGroupUser = (userId: string) => {
+        setSelectedGroupUsers(prev =>
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
+
     const isMarkingRead = useRef<boolean>(false);
 
     // Handle selecting a conversation
@@ -367,9 +460,9 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
 
         fetchMessagesAndMarkRead();
 
-        // Subscribe to new messages for THIS conversation
+        // Subscribe to new messages AND typing/read events for THIS conversation
         const channel = supabase
-            .channel(`messages-${selectedConversation}`)
+            .channel(`conversation-${selectedConversation}`)
             .on(
                 'postgres_changes',
                 {
@@ -379,7 +472,6 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                     filter: `conversation_id=eq.${selectedConversation}`,
                 },
                 async (payload) => {
-                    console.log('New message in active chat:', payload);
                     if (user && payload.new.sender_id === user.id) return;
 
                     const { data: senderData } = await supabase
@@ -409,6 +501,29 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                     }
                 }
             )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `conversation_id=eq.${selectedConversation}`,
+                },
+                (payload) => {
+                    // Update read status in real-time
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === payload.new.id ? { ...msg, ...payload.new } : msg
+                    ));
+                }
+            )
+            .on('broadcast', { event: 'typing' }, ({ payload }) => {
+                if (payload.userId !== user.id) {
+                    setTypingUser(payload.userName);
+                    // Clear after 3 seconds of no typing signal
+                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                    typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+                }
+            })
             .subscribe();
 
         return () => {
@@ -468,7 +583,17 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
         }
     };
 
+    const handleTyping = () => {
+        if (!selectedConversation) return;
+        supabase.channel(`conversation-${selectedConversation}`).send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: { userId: user.id, userName: user.user_metadata?.full_name || 'Someone' },
+        });
+    };
+
     const handleKeyPress = (e: React.KeyboardEvent) => {
+        handleTyping();
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
@@ -502,13 +627,22 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                 <div className={`w-full md:w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-surface-dark overflow-y-auto ${selectedConversation ? 'hidden md:block' : 'block'}`}>
                     <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
                         <h3 className="font-black text-lg text-slate-900 dark:text-white">{t.messages}</h3>
-                        <button
-                            onClick={() => onNavigate('Community')}
-                            className="text-primary hover:bg-primary/10 p-2 rounded-full transition-colors"
-                            title={language === 'en' ? 'Find people' : language === 'es' ? 'Buscar personas' : 'Find people'}
-                        >
-                            <span className="material-symbols-outlined">person_search</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setShowCreateGroup(true)}
+                                className="text-primary hover:bg-primary/10 p-2 rounded-full transition-colors"
+                                title={language === 'en' ? 'Create Group' : language === 'es' ? 'Crear Grupo' : 'Create Group'}
+                            >
+                                <span className="material-symbols-outlined">group_add</span>
+                            </button>
+                            <button
+                                onClick={() => onNavigate('Community')}
+                                className="text-primary hover:bg-primary/10 p-2 rounded-full transition-colors"
+                                title={language === 'en' ? 'Find people' : language === 'es' ? 'Buscar personas' : 'Find people'}
+                            >
+                                <span className="material-symbols-outlined">person_search</span>
+                            </button>
+                        </div>
                     </div>
                     {loading ? (
                         <div className="flex items-center justify-center p-12">
@@ -535,7 +669,19 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                                     className={`p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800 ${selectedConversation === conv.id ? 'bg-primary/5' : ''
                                         }`}
                                 >
-                                    {conv.other_user?.avatar_url ? (
+                                    {conv.is_group ? (
+                                        conv.avatar_url ? (
+                                            <img
+                                                src={conv.avatar_url}
+                                                className="size-12 rounded-full object-cover ring-2 ring-slate-100 dark:ring-slate-800"
+                                                alt={conv.name || 'Group'}
+                                            />
+                                        ) : (
+                                            <div className="size-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary text-lg font-black ring-2 ring-slate-100 dark:ring-slate-800">
+                                                <span className="material-symbols-outlined">groups</span>
+                                            </div>
+                                        )
+                                    ) : conv.other_user?.avatar_url ? (
                                         <img
                                             src={conv.other_user.avatar_url}
                                             className="size-12 rounded-full object-cover ring-2 ring-slate-100 dark:ring-slate-800"
@@ -543,12 +689,12 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                                         />
                                     ) : (
                                         <div className="size-12 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white text-lg font-black ring-2 ring-slate-100 dark:ring-slate-800">
-                                            {(conv.other_user?.full_name || 'U')[0]}
+                                            {(conv.other_user?.full_name || conv.name || 'U')[0]}
                                         </div>
                                     )}
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-bold text-slate-900 dark:text-white text-sm truncate">
-                                            {conv.other_user?.full_name}
+                                            {conv.name || conv.other_user?.full_name}
                                         </h4>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                                             {conv.last_message?.content || 'Start a conversation'}
@@ -592,7 +738,11 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                                 >
                                     <span className="material-symbols-outlined">arrow_back</span>
                                 </button>
-                                {headerAvatar ? (
+                                {selectedConvData?.is_group ? (
+                                    <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary">
+                                        <span className="material-symbols-outlined">groups</span>
+                                    </div>
+                                ) : headerAvatar ? (
                                     <img
                                         src={headerAvatar}
                                         className="size-10 rounded-full object-cover"
@@ -603,51 +753,98 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                                         {(headerName || 'U')[0]}
                                     </div>
                                 )}
-                                <div>
+                                <div className="flex-1 min-w-0">
                                     <h4 className="font-bold text-slate-900 dark:text-white leading-tight">
-                                        {headerName}
+                                        {selectedConvData?.name || headerName}
                                     </h4>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        {headerUsername ? (headerUsername.startsWith('@') ? headerUsername : `@${headerUsername}`) : '@usuario'}
+                                        {selectedConvData?.is_group
+                                            ? `${selectedConvData.participants?.length || 0} ${language === 'en' ? 'members' : 'miembros'}`
+                                            : headerUsername ? (headerUsername.startsWith('@') ? headerUsername : `@${headerUsername}`) : '@usuario'}
                                     </p>
                                 </div>
+                                {selectedConvData?.is_group && (
+                                    <button
+                                        onClick={() => setShowMembersModal(true)}
+                                        className="p-2 text-slate-400 hover:text-primary transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined">info</span>
+                                    </button>
+                                )}
                             </div>
 
                             {/* Messages */}
                             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-background-dark">
-                                {messages.map((msg) => {
+                                {messages.map((msg, index) => {
                                     const isOwn = msg.sender_id === user.id;
+                                    const isGroup = selectedConvData?.is_group;
+                                    // Logic: show name if it's a group, not our own message, and the sender changed
+                                    const showName = isGroup && !isOwn && (index === 0 || messages[index - 1].sender_id !== msg.sender_id);
+
                                     return (
-                                        <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`flex gap-2 max-w-[70%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                                                {!isOwn && msg.sender?.avatar_url && (
-                                                    <img
-                                                        src={msg.sender.avatar_url}
-                                                        className="size-8 rounded-full object-cover"
-                                                        alt={msg.sender.full_name}
-                                                    />
+                                        <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                                            {showName && (
+                                                <span className="text-[11px] font-bold text-primary mb-1 ml-10">
+                                                    {msg.sender?.full_name}
+                                                </span>
+                                            )}
+                                            <div className={`flex gap-2 max-w-[85%] md:max-w-[70%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                {!isOwn && (
+                                                    <div className="size-8 shrink-0">
+                                                        {showName ? (
+                                                            msg.sender?.avatar_url ? (
+                                                                <img
+                                                                    src={msg.sender.avatar_url}
+                                                                    className="size-8 rounded-full object-cover"
+                                                                    alt={msg.sender.full_name}
+                                                                />
+                                                            ) : (
+                                                                <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold">
+                                                                    {msg.sender?.full_name?.[0]}
+                                                                </div>
+                                                            )
+                                                        ) : null}
+                                                    </div>
                                                 )}
                                                 <div
                                                     className={`px-4 py-2 rounded-2xl ${isOwn
                                                         ? 'bg-primary text-white rounded-br-sm'
                                                         : 'bg-white dark:bg-surface-dark text-slate-900 dark:text-white rounded-bl-sm'
-                                                        }`}
+                                                        } shadow-sm`}
                                                 >
-                                                    <p className="text-sm">{msg.content}</p>
-                                                    <p
-                                                        className={`text-[10px] mt-1 ${isOwn ? 'text-white/70' : 'text-slate-400'
-                                                            }`}
-                                                    >
-                                                        {new Date(msg.created_at).toLocaleTimeString([], {
-                                                            hour: '2-digit',
-                                                            minute: '2-digit',
-                                                        })}
-                                                    </p>
+                                                    <p className="text-sm leading-relaxed">{msg.content}</p>
+                                                    <div className="flex items-center justify-end gap-1 mt-1">
+                                                        <p className={`text-[9px] ${isOwn ? 'text-white/70' : 'text-slate-400'}`}>
+                                                            {new Date(msg.created_at).toLocaleTimeString([], {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit',
+                                                            })}
+                                                        </p>
+                                                        {isOwn && (
+                                                            <span className="text-[8px] font-black uppercase tracking-tighter opacity-80 leading-none">
+                                                                {msg.read
+                                                                    ? (language === 'en' ? 'Read' : 'Leido')
+                                                                    : (language === 'en' ? 'Sent' : 'Enviado')}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     );
                                 })}
+                                {typingUser && (
+                                    <div className="flex items-center gap-2 animate-pulse mb-4">
+                                        <div className="flex gap-1 bg-slate-200 dark:bg-slate-800 px-3 py-2 rounded-2xl rounded-bl-sm">
+                                            <div className="size-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                            <div className="size-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                            <div className="size-1.5 bg-slate-400 rounded-full animate-bounce"></div>
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 italic">
+                                            {typingUser} {language === 'en' ? 'is typing...' : 'está escribiendo...'}
+                                        </span>
+                                    </div>
+                                )}
                                 <div ref={messagesEndRef} />
                             </div>
 
@@ -686,6 +883,124 @@ const Chat = ({ onNavigate, user, language, selectedUserId }: Props) => {
                     )}
                 </div>
             </div>
+
+            {/* Create Group Modal */}
+            {showCreateGroup && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-surface-dark w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                                {language === 'en' ? 'New Group' : 'Nuevo Grupo'}
+                            </h3>
+                            <button onClick={() => setShowCreateGroup(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                                    {language === 'en' ? 'Group Name' : 'Nombre del Grupo'}
+                                </label>
+                                <input
+                                    type="text"
+                                    value={groupName}
+                                    onChange={(e) => setGroupName(e.target.value)}
+                                    placeholder={language === 'en' ? 'Epic Route 2026...' : 'El Camino Epico 2026...'}
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                                    {language === 'en' ? 'Select Participants' : 'Seleccionar Participantes'} ({selectedGroupUsers.length})
+                                </label>
+                                <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {availableUsers.map(u => (
+                                        <div
+                                            key={u.id}
+                                            onClick={() => toggleGroupUser(u.id)}
+                                            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedGroupUsers.includes(u.id)
+                                                ? 'bg-primary/10 ring-1 ring-primary'
+                                                : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            {u.avatar_url ? (
+                                                <img src={u.avatar_url} className="size-10 rounded-full object-cover" alt="" />
+                                            ) : (
+                                                <div className="size-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold">
+                                                    {(u.full_name || u.username || 'U')[0]}
+                                                </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{u.full_name}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">@{u.username}</p>
+                                            </div>
+                                            <div className={`size-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedGroupUsers.includes(u.id) ? 'bg-primary border-primary' : 'border-gray-200 dark:border-gray-700'}`}>
+                                                {selectedGroupUsers.includes(u.id) && <span className="material-symbols-outlined text-white text-lg">check</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
+                            <button
+                                onClick={() => setShowCreateGroup(false)}
+                                className="flex-1 py-3 rounded-xl font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                            >
+                                {language === 'en' ? 'Cancel' : 'Cancelar'}
+                            </button>
+                            <button
+                                onClick={handleCreateGroupChat}
+                                disabled={isCreatingGroup || !groupName.trim() || selectedGroupUsers.length === 0}
+                                className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold shadow-lg shadow-primary/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isCreatingGroup && <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
+                                {language === 'en' ? 'Create Group' : 'Crear Grupo'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Members Modal */}
+            {showMembersModal && selectedConvData && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-surface-dark w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                            <h3 className="font-black text-lg text-slate-900 dark:text-white">
+                                {language === 'en' ? 'Group Members' : 'Miembros del Grupo'}
+                            </h3>
+                            <button onClick={() => setShowMembersModal(false)} className="text-slate-400 hover:text-primary transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto max-h-[60vh] p-2">
+                            {selectedConvData.participants?.map((p: any) => (
+                                <div key={p.id} className="flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition-colors">
+                                    {p.avatar_url ? (
+                                        <img src={p.avatar_url} className="size-10 rounded-full object-cover" alt={p.full_name} />
+                                    ) : (
+                                        <div className="size-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                            {p.full_name?.[0]}
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{p.full_name}</p>
+                                        <p className="text-xs text-slate-500 truncate">@{p.username || 'usuario'}</p>
+                                    </div>
+                                    {p.id === user.id && (
+                                        <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-1 rounded-full uppercase">
+                                            {language === 'en' ? 'You' : 'Tú'}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

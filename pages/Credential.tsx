@@ -218,7 +218,7 @@ const RouteMapCard = memo(({ route, onClick, onDelete, isOwnProfile }: { route: 
 });
 
 // Route Detail View Component - Instagram Style
-const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route: any, profile: any, user: any, onNavigate: any, onClose: () => void }) => {
+const RouteDetailView = ({ route, profile, user, onNavigate, onClose, onEdit }: { route: any, profile: any, user: any, onNavigate: any, onClose: () => void, onEdit: (route: any) => void }) => {
     const start = useMemo(() => [route.start_lat, route.start_lng] as [number, number], [route]);
     const end = useMemo(() => [route.end_lat, route.end_lng] as [number, number], [route]);
     const [routePath, setRoutePath] = useState<[number, number][]>([]);
@@ -375,26 +375,45 @@ const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route:
                 )}
 
                 {/* Route info overlay */}
-                <div className="absolute bottom-4 left-4 right-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl p-3 shadow-lg">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-1 font-semibold">
-                            <span className="material-symbols-outlined text-lg">straighten</span>
-                            {route.distance_km}
-                        </span>
-                        <span className="flex items-center gap-1 font-semibold">
-                            <span className="material-symbols-outlined text-lg">schedule</span>
-                            {route.duration_text}
-                        </span>
-                        <button
-                            onClick={() => {
-                                onClose();
-                                onNavigate('Planner', null, route.id);
-                            }}
-                            className="px-3 py-1.5 bg-primary text-white rounded-full text-xs font-bold hover:bg-primary-dark transition-colors flex items-center gap-1"
-                        >
-                            <span className="material-symbols-outlined text-sm">map</span>
-                            Ver ruta
-                        </button>
+                <div className="absolute bottom-4 left-4 right-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl p-2.5 shadow-2xl z-[1000] border border-white/20">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-4 flex-1">
+                            <div className="flex flex-col">
+                                <span className="text-[7px] font-black uppercase text-slate-400 tracking-tighter">Distancia</span>
+                                <span className="flex items-center gap-1 font-bold text-xs text-slate-900 dark:text-white">
+                                    <span className="material-symbols-outlined text-sm text-primary">straighten</span>
+                                    {route.distance_km}
+                                </span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[7px] font-black uppercase text-slate-400 tracking-tighter">Tiempo</span>
+                                <span className="flex items-center gap-1 font-bold text-xs text-slate-900 dark:text-white">
+                                    <span className="material-symbols-outlined text-sm text-primary">schedule</span>
+                                    {route.duration_text}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex gap-1.5">
+                            {user?.id === route.user_id && (
+                                <button
+                                    onClick={() => onEdit(route)}
+                                    className="px-3 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-[9px] font-black hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
+                                >
+                                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                                    <span className="uppercase">Editar</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={() => {
+                                    onClose();
+                                    onNavigate('Planner', null, route.id);
+                                }}
+                                className="px-3 py-2 bg-primary text-white rounded-lg text-[9px] font-black shadow-lg shadow-primary/20 hover:bg-primary-dark hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
+                            >
+                                <span className="material-symbols-outlined text-[14px]">map</span>
+                                <span className="uppercase">Ver ruta</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -402,22 +421,43 @@ const RouteDetailView = ({ route, profile, user, onNavigate, onClose }: { route:
             {/* Actions and Comments */}
             <div className="p-4">
                 {/* Action buttons */}
-                <div className="flex items-center gap-4 mb-3">
-                    <button
-                        onClick={handleLike}
-                        className={`flex items-center gap-1 transition-colors ${isLiked ? 'text-red-500' : 'text-slate-600 dark:text-slate-300 hover:text-red-500'}`}
-                    >
-                        <span className={`material-symbols-outlined text-2xl ${isLiked ? 'filled' : ''}`}>favorite</span>
-                        {likeCount > 0 && <span className="text-sm font-bold">{likeCount}</span>}
-                    </button>
-                    <button
-                        onClick={handleShowComments}
-                        className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
-                    >
-                        <span className="material-symbols-outlined text-2xl">mode_comment</span>
-                        {commentCount > 0 && <span className="text-sm font-bold">{commentCount}</span>}
-                    </button>
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={handleLike}
+                            className={`flex items-center gap-1 transition-colors ${isLiked ? 'text-red-500' : 'text-slate-600 dark:text-slate-300 hover:text-red-500'}`}
+                        >
+                            <span className={`material-symbols-outlined text-2xl ${isLiked ? 'filled' : ''}`}>favorite</span>
+                            {likeCount > 0 && <span className="text-sm font-bold">{likeCount}</span>}
+                        </button>
+                        <button
+                            onClick={handleShowComments}
+                            className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-2xl">mode_comment</span>
+                            {commentCount > 0 && <span className="text-sm font-bold">{commentCount}</span>}
+                        </button>
+                    </div>
                 </div>
+
+                {/* Participants / Mentions */}
+                {route.participants && route.participants.length > 0 && (
+                    <div className="mb-4">
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Realizada con:</p>
+                        <div className="flex flex-wrap gap-2">
+                            {route.participants.map((p: any) => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => onNavigate('Credential', p.id)}
+                                    className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/50 hover:bg-primary/10 px-2 py-1 rounded-full border border-slate-100 dark:border-slate-800 transition-colors group"
+                                >
+                                    <img src={p.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name || '?')}`} className="size-5 rounded-full object-cover" alt="" />
+                                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 group-hover:text-primary transition-colors">{p.full_name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Like count */}
                 {likeCount > 0 && (
@@ -592,6 +632,13 @@ const Credential = ({
         bio: ''
     });
 
+    // Edit Route State
+    const [isEditingRoute, setIsEditingRoute] = useState(false);
+    const [editingRoute, setEditingRoute] = useState<any>(null);
+    const [routeMentions, setRouteMentions] = useState<any[]>([]);
+    const [mentionSearch, setMentionSearch] = useState('');
+    const [mentionResults, setMentionResults] = useState<any[]>([]);
+
     const handleEditClick = () => {
         setEditForm({
             full_name: profile?.full_name || user?.user_metadata?.full_name || '',
@@ -599,6 +646,36 @@ const Credential = ({
             bio: profile?.bio || ''
         });
         setIsEditingProfile(true);
+    };
+
+    const handleEditRoute = (route: any) => {
+        setEditingRoute(route);
+        setRouteMentions(route.participants || []);
+        setIsEditingRoute(true);
+    };
+
+    const handleSaveRoute = async () => {
+        if (!editingRoute) return;
+        try {
+            const { error } = await supabase
+                .from('user_routes')
+                .update({
+                    name: editingRoute.name,
+                    participants: routeMentions
+                })
+                .eq('id', editingRoute.id);
+
+            if (error) throw error;
+            setIsEditingRoute(false);
+            setSavedRoutes(prev => prev.map(r => r.id === editingRoute.id ? { ...r, name: editingRoute.name, participants: routeMentions } : r));
+            if (selectedRoute?.id === editingRoute.id) {
+                setSelectedRoute({ ...selectedRoute, name: editingRoute.name, participants: routeMentions });
+            }
+            alert('Ruta actualizada correctamente');
+        } catch (error) {
+            console.error('Error updating route:', error);
+            alert('Error al actualizar la ruta. Es posible que falte la columna "participants" en la base de datos.');
+        }
     };
 
     const handleSaveProfile = async () => {
@@ -643,6 +720,33 @@ const Credential = ({
         const timer = setTimeout(fetchResults, 300);
         return () => clearTimeout(timer);
     }, [searchQuery]);
+
+    useEffect(() => {
+        const fetchMentionResults = async () => {
+            if (mentionSearch.length < 2) {
+                setMentionResults([]);
+                return;
+            }
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, full_name, username, avatar_url')
+                .or(`full_name.ilike.%${mentionSearch}%,username.ilike.%${mentionSearch}%`)
+                .neq('id', user.id) // Don't mention yourself
+                .limit(5);
+            setMentionResults(data || []);
+        };
+
+        const timer = setTimeout(fetchMentionResults, 300);
+        return () => clearTimeout(timer);
+    }, [mentionSearch]);
+
+    const toggleMention = (p: any) => {
+        if (routeMentions.find(m => m.id === p.id)) {
+            setRouteMentions(prev => prev.filter(m => m.id !== p.id));
+        } else {
+            setRouteMentions(prev => [...prev, p]);
+        }
+    };
 
     // If selectedProfileId exists, we are viewing that specific user. Otherwise, we view the logged-in user.
     const targetUserId = selectedProfileId || user?.id;
@@ -1361,6 +1465,21 @@ const Credential = ({
                 <div className="max-w-4xl mx-auto mt-6">
                     {activeTab === 'posts' && (
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-1 md:gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {isOwnProfile && (
+                                <div
+                                    onClick={() => onNavigate('Live')}
+                                    className="group relative aspect-square rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 transition-all cursor-pointer flex flex-col items-center justify-center gap-3 p-4 text-center overflow-hidden"
+                                >
+                                    <div className="absolute inset-x-0 inset-y-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <div className="size-14 rounded-full bg-primary/20 flex items-center justify-center text-primary shadow-lg shadow-primary/10 group-hover:scale-110 transition-transform">
+                                        <span className="material-symbols-outlined text-3xl animate-pulse">sensors</span>
+                                    </div>
+                                    <div className="space-y-1 relative z-10">
+                                        <h4 className="text-xs font-black text-primary uppercase tracking-widest">{language === 'en' ? 'Start Live' : 'Ruta en Vivo'}</h4>
+                                        <p className="text-[10px] text-primary/60 font-medium leading-tight">Registra tu camino con GPS en tiempo real</p>
+                                    </div>
+                                </div>
+                            )}
                             {savedRoutes.length > 0 ? (
                                 savedRoutes.map(route => (
                                     <RouteMapCard
@@ -1585,7 +1704,7 @@ const Credential = ({
                         </div>
 
                         {/* Route content - reusing the card structure */}
-                        <RouteDetailView route={selectedRoute} profile={profile} user={user} onNavigate={onNavigate} onClose={() => setSelectedRoute(null)} />
+                        <RouteDetailView route={selectedRoute} profile={profile} user={user} onNavigate={onNavigate} onClose={() => setSelectedRoute(null)} onEdit={handleEditRoute} />
                     </div>
                 </div>
             )}
@@ -1596,6 +1715,92 @@ const Credential = ({
                     isOpen={!!selectedFullImage}
                     onClose={() => setSelectedFullImage(null)}
                 />
+            )}
+            {/* Edit Route Modal */}
+            {isEditingRoute && editingRoute && (
+                <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-surface-dark w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                            <h3 className="font-black text-xl text-slate-900 dark:text-white">
+                                Editar Ruta
+                            </h3>
+                            <button onClick={() => setIsEditingRoute(false)} className="text-slate-400 hover:text-primary transition-colors">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Nombre de la Ruta</label>
+                                <input
+                                    type="text"
+                                    value={editingRoute.name}
+                                    onChange={(e) => setEditingRoute({ ...editingRoute, name: e.target.value })}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-primary/20 transition-all"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Mencionar Compañeros</label>
+                                <div className="space-y-3">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Busca por nombre o @usuario..."
+                                            value={mentionSearch}
+                                            onChange={(e) => setMentionSearch(e.target.value)}
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                                        />
+                                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                                    </div>
+
+                                    {mentionResults.length > 0 && (
+                                        <div className="bg-slate-50 dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800">
+                                            {mentionResults.map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => { toggleMention(p); setMentionSearch(''); setMentionResults([]); }}
+                                                    className="w-full flex items-center gap-3 p-3 hover:bg-primary/5 transition-colors border-b border-slate-100 dark:border-slate-700 last:border-0"
+                                                >
+                                                    <img src={p.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}`} className="size-8 rounded-full object-cover" alt="" />
+                                                    <div className="flex-1 text-left">
+                                                        <p className="font-bold text-xs text-slate-900 dark:text-white">{p.full_name}</p>
+                                                        <p className="text-[10px] text-slate-500">@{p.username || 'usuario'}</p>
+                                                    </div>
+                                                    <span className="material-symbols-outlined text-primary text-sm">add_circle</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        {routeMentions.map(p => (
+                                            <div key={p.id} className="flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-full border border-primary/20">
+                                                <span className="text-xs font-bold">{p.full_name}</span>
+                                                <button onClick={() => toggleMention(p)} className="flex items-center hover:scale-110 transition-transform">
+                                                    <span className="material-symbols-outlined text-xs">close</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
+                            <button
+                                onClick={() => setIsEditingRoute(false)}
+                                className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSaveRoute}
+                                className="flex-[2] py-3 px-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold shadow-lg shadow-primary/20 transition-all active:scale-95"
+                            >
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -332,6 +332,10 @@ const LandingPage = ({
               <button onClick={() => onNavigate('Landing')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.home}</button>
               <button onClick={() => onNavigate('Planner')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.map}</button>
               <button onClick={() => onNavigate('Community')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">{t.community}</button>
+              <button onClick={() => onNavigate('Live')} className="nav-link text-primary dark:text-primary text-sm font-bold transition-colors flex items-center gap-1 group">
+                <span className="size-2 bg-primary rounded-full animate-pulse"></span>
+                {language === 'en' ? 'Live' : 'En vivo'}
+              </button>
               {user && (
                 <button onClick={() => onNavigate('Chat')} className="nav-link text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors flex items-center gap-1">
                   {t.chat}
@@ -821,9 +825,17 @@ const LandingPage = ({
 
             <button onClick={() => { onNavigate('Landing'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.home}</button>
             <button onClick={() => { onNavigate('Planner'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.map}</button>
-            <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.community}</button>
+            <button onClick={() => { onNavigate('Community'); setIsMobileMenuOpen(false); }} className="nav-link text-left px-4 py-2 text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">
+              {t.community}
+            </button>
+            <button onClick={() => { onNavigate('Live'); setIsMobileMenuOpen(false); }} className="nav-link text-left px-4 py-2 text-primary dark:text-primary text-sm font-bold transition-colors flex items-center gap-2">
+              <span className="size-2 bg-primary rounded-full animate-pulse"></span>
+              {language === 'en' ? 'Live Tracking' : 'Seguimiento en Vivo'}
+            </button>
             {user && (
-              <button onClick={() => { onNavigate('Chat'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{t.chat}</button>
+              <button onClick={() => { onNavigate('Chat'); setIsMobileMenuOpen(false); }} className="nav-link text-left px-4 py-2 text-[#0e1b14] dark:text-gray-200 text-sm font-semibold transition-colors">
+                {t.chat}
+              </button>
             )}
             <button onClick={() => { onNavigate('Contact'); setIsMobileMenuOpen(false); }} className="text-left text-[#0e1b14] dark:text-gray-200 text-base font-bold py-2">{language === 'en' ? 'Contact' : 'Contacto'}</button>
             <div className="h-px bg-gray-100 dark:bg-gray-800 my-1"></div>
