@@ -1,15 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
-
-// Fix Leaflet icons
-const icon = L.icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-});
 
 const currentPosIcon = L.divIcon({
     className: 'custom-div-icon',
@@ -21,17 +13,6 @@ const currentPosIcon = L.divIcon({
     iconAnchor: [8, 8],
 });
 
-// Haversine formula
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-};
-
 const MapController = ({ center }: { center: [number, number] }) => {
     const map = useMap();
     useEffect(() => {
@@ -40,100 +21,43 @@ const MapController = ({ center }: { center: [number, number] }) => {
     return null;
 };
 
+const MapResizer = () => {
+    const map = useMap();
+    useEffect(() => {
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+    }, [map]);
+    return null;
+};
+
 interface LiveTrackerProps {
     onNavigate: (view: any) => void;
     user: any;
     language: string;
+    trackingState: {
+        isRecording: boolean;
+        setIsRecording: (v: boolean) => void;
+        isPaused: boolean;
+        setIsPaused: (v: boolean) => void;
+        path: [number, number][];
+        setPath: (v: any) => void;
+        distance: number;
+        setDistance: (v: any) => void;
+        time: number;
+        setTime: (v: any) => void;
+        currentPos: [number, number] | null;
+        resetTracking: () => void;
+    };
 }
 
-const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
-    const [isRecording, setIsRecording] = useState(false);
-    const [path, setPath] = useState<[number, number][]>([]);
-    const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
-    const [distance, setDistance] = useState(0);
-    const [startTime, setStartTime] = useState<number | null>(null);
-    const [elapsedTime, setElapsedTime] = useState(0);
-    const [isPaused, setIsPaused] = useState(false);
-
-    const watchId = useRef<number | null>(null);
-    const timerId = useRef<any>(null);
-
-    // Unified tracking logic
-    useEffect(() => {
-        const options: PositionOptions = {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0
-        };
-
-        const success = (pos: GeolocationPosition) => {
-            const newCoord: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-            setCurrentPos(newCoord);
-
-            if (isRecording && !isPaused) {
-                setPath(prev => {
-                    if (prev.length > 0) {
-                        const last = prev[prev.length - 1];
-                        const d = calculateDistance(last[0], last[1], newCoord[0], newCoord[1]);
-                        if (d > 0.005) {
-                            setDistance(old => old + d);
-                            return [...prev, newCoord];
-                        }
-                        return prev;
-                    }
-                    return [newCoord];
-                });
-            }
-        };
-
-        const error = (err: GeolocationPositionError) => {
-            console.error("Geolocation error:", err);
-            // Fallback for PC if High Accuracy fails
-            if (err.code === 3 && options.enableHighAccuracy) {
-                console.log("Retrying without high accuracy...");
-                navigator.geolocation.getCurrentPosition(success, error, { ...options, enableHighAccuracy: false });
-            } else if (err.code === 1) {
-                alert(language === 'en' ? "Please enable location permissions" : "Por favor, activa los permisos de ubicación");
-            }
-        };
-
-        watchId.current = navigator.geolocation.watchPosition(success, error, options);
-
-        return () => {
-            if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
-        };
-    }, [isRecording, isPaused, language]);
-
-    const requestManualLocation = () => {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => setCurrentPos([pos.coords.latitude, pos.coords.longitude]),
-            (err) => alert(language === 'en' ? "Location access denied" : "Acceso a ubicación denegado"),
-            { enableHighAccuracy: true }
-        );
-    };
-
-    // Force map to occupy full container
-    const MapResizer = () => {
-        const map = useMap();
-        useEffect(() => {
-            setTimeout(() => {
-                map.invalidateSize();
-            }, 100);
-        }, [map]);
-        return null;
-    };
-
-    // Timer logic
-    useEffect(() => {
-        if (isRecording && !isPaused) {
-            timerId.current = setInterval(() => {
-                setElapsedTime(prev => prev + 1);
-            }, 1000);
-        } else {
-            if (timerId.current) clearInterval(timerId.current);
-        }
-        return () => { if (timerId.current) clearInterval(timerId.current); };
-    }, [isRecording, isPaused]);
+const LiveTracker = ({ onNavigate, user, language, trackingState }: LiveTrackerProps) => {
+    const {
+        isRecording, setIsRecording,
+        isPaused, setIsPaused,
+        path, distance, time,
+        currentPos, resetTracking
+    } = trackingState;
 
     const formatTime = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
@@ -147,10 +71,7 @@ const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
             alert(language === 'en' ? 'Please login to track activities' : 'Inicia sesión para registrar actividades');
             return;
         }
-        setPath([]);
-        setDistance(0);
-        setElapsedTime(0);
-        setStartTime(Date.now());
+        resetTracking();
         setIsRecording(true);
         setIsPaused(false);
     };
@@ -169,7 +90,7 @@ const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
                     user_id: user.id,
                     name: routeName,
                     distance_km: distance.toFixed(2),
-                    duration_text: formatTime(elapsedTime),
+                    duration_text: formatTime(time),
                     start_lat: path[0][0],
                     start_lng: path[0][1],
                     end_lat: path[path.length - 1][0],
@@ -180,21 +101,32 @@ const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
 
                 if (error) throw error;
                 alert(language === 'en' ? 'Route saved!' : '¡Ruta guardada!');
+                resetTracking();
                 onNavigate('Credential');
             } catch (err: any) {
                 console.error(err);
                 alert('Error: ' + err.message);
             }
+        } else {
+            resetTracking();
         }
     };
 
     const pace = useMemo(() => {
         if (distance === 0) return '0:00';
-        const paceMinKm = (elapsedTime / 60) / distance;
+        const paceMinKm = (time / 60) / distance;
         const min = Math.floor(paceMinKm);
         const sec = Math.round((paceMinKm - min) * 60);
         return `${min}:${sec.toString().padStart(2, '0')}`;
-    }, [distance, elapsedTime]);
+    }, [distance, time]);
+
+    const requestManualLocation = () => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => { }, // App.tsx will pick it up via watch
+            (err) => alert(language === 'en' ? "Location access denied" : "Acceso a ubicación denegado"),
+            { enableHighAccuracy: true }
+        );
+    };
 
     return (
         <div className="flex-1 flex flex-col relative h-screen bg-slate-100 overflow-hidden">
@@ -207,9 +139,9 @@ const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
                     <span className="material-symbols-outlined">arrow_back</span>
                 </button>
                 <div className="flex flex-col items-end gap-2">
-                    <div className="pointer-events-auto bg-primary text-white px-4 py-2 rounded-full font-black text-xs shadow-xl animate-pulse flex items-center gap-2">
+                    <div className={`pointer-events-auto ${isRecording ? 'bg-red-500' : 'bg-primary'} text-white px-4 py-2 rounded-full font-black text-xs shadow-xl flex items-center gap-2 ${isRecording && !isPaused ? 'animate-pulse' : ''}`}>
                         <span className="size-2 bg-white rounded-full"></span>
-                        {isRecording ? (isPaused ? 'PAUSADO' : 'EN DIRECTO') : 'LISTO PARA EMPEZAR'}
+                        {isRecording ? (isPaused ? (language === 'en' ? 'PAUSED' : 'PAUSADO') : (language === 'en' ? 'LIVE' : 'EN DIRECTO')) : (language === 'en' ? 'READY' : 'LISTO')}
                     </div>
                     <button
                         onClick={requestManualLocation}
@@ -233,18 +165,17 @@ const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
                     <MapResizer />
                     {currentPos && <MapController center={currentPos} />}
                     {currentPos && <Marker position={currentPos} icon={currentPosIcon} />}
-                    {path.length > 1 && <Polyline positions={path} color="#16a34a" weight={6} opacity={0.8} lineCap="round" />}
+                    {path.length > 1 && <Polyline positions={path} color="#ef4444" weight={6} opacity={0.8} lineCap="round" />}
                 </MapContainer>
             </div>
 
             {/* Stats Overlay */}
             <div className="absolute bottom-0 inset-x-0 z-[1001] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 rounded-t-[40px] shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.15)] p-8">
                 <div className="max-w-md mx-auto space-y-8">
-                    {/* Big Stats */}
                     <div className="grid grid-cols-3 gap-4">
                         <div className="text-center group">
                             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">{language === 'en' ? 'Time' : 'TIEMPO'}</p>
-                            <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{formatTime(elapsedTime)}</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{formatTime(time)}</p>
                         </div>
                         <div className="text-center group border-x border-slate-100 dark:border-slate-800">
                             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">{language === 'en' ? 'Distance' : 'DISTANCIA'}</p>
@@ -262,7 +193,6 @@ const LiveTracker = ({ onNavigate, user, language }: LiveTrackerProps) => {
                         </div>
                     </div>
 
-                    {/* Controls */}
                     <div className="flex items-center justify-center gap-6">
                         {!isRecording ? (
                             <button

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LandingPage from './pages/LandingPage';
 import PilgrimDashboard from './pages/PilgrimDashboard';
 import RoutePlanner from './pages/RoutePlanner';
@@ -41,6 +41,29 @@ export default function App() {
   const [birthDate, setBirthDate] = useState('');
   const [country, setCountry] = useState('ES');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Live Tracking Global State
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [trackingPath, setTrackingPath] = useState<[number, number][]>([]);
+  const [trackingDistance, setTrackingDistance] = useState(0);
+  const [trackingTime, setTrackingTime] = useState(0);
+  const [trackingStartTime, setTrackingStartTime] = useState<number | null>(null);
+  const [currentGPSPos, setCurrentGPSPos] = useState<[number, number] | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<any>(null);
+  const timerIdRef = useRef<any>(null);
+
+  // Helper: Haversine distance
+  const calculateDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,6 +114,99 @@ export default function App() {
       supabase.removeChannel(channel);
     };
   }, [session]);
+
+  // Global Tracking Effect
+  useEffect(() => {
+    const success = (pos: GeolocationPosition) => {
+      const coord: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+      setCurrentGPSPos(coord);
+
+      if (isRecording && !isPaused) {
+        setTrackingPath(prev => {
+          if (prev.length > 0) {
+            const last = prev[prev.length - 1];
+            const d = calculateDist(last[0], last[1], coord[0], coord[1]);
+            if (d > 0.005) { // 5 meters
+              setTrackingDistance(old => old + d);
+              return [...prev, coord];
+            }
+            return prev;
+          }
+          return [coord];
+        });
+      }
+    };
+
+    const error = (err: any) => console.log("GPS Background:", err);
+    const options = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(success, error, options);
+
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
+  }, [isRecording, isPaused]);
+
+  // Screen Wake Lock
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && isRecording && !isPaused) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        } catch (err) {
+          console.log("WakeLock error:", err);
+        }
+      } else {
+        if (wakeLockRef.current) {
+          wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        }
+      }
+    };
+    requestWakeLock();
+    return () => { if (wakeLockRef.current) wakeLockRef.current.release(); };
+  }, [isRecording, isPaused]);
+
+  // Global Timer Effect (Robust)
+  useEffect(() => {
+    if (isRecording && !isPaused) {
+      if (!trackingStartTime) setTrackingStartTime(Date.now() - (trackingTime * 1000));
+
+      timerIdRef.current = setInterval(() => {
+        if (trackingStartTime) {
+          const elapsed = Math.floor((Date.now() - trackingStartTime) / 1000);
+          setTrackingTime(elapsed);
+        }
+      }, 1000);
+    } else {
+      setTrackingStartTime(null);
+      if (timerIdRef.current) clearInterval(timerIdRef.current);
+    }
+    return () => {
+      if (timerIdRef.current) clearInterval(timerIdRef.current);
+    };
+  }, [isRecording, isPaused, trackingStartTime]);
+
+  // Resync on visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isRecording) {
+        // Force refresh or logical sync if needed
+        console.log("App visible, syncing tracking...");
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isRecording]);
+
+  const resetTracking = () => {
+    setTrackingPath([]);
+    setTrackingDistance(0);
+    setTrackingTime(0);
+    setTrackingStartTime(null);
+    setIsRecording(false);
+    setIsPaused(false);
+  };
 
   const markAllAsRead = async () => {
     if (!session?.user) return;
@@ -186,6 +302,15 @@ export default function App() {
     showNotifications,
     setShowNotifications,
     markAllAsRead,
+    trackingState: {
+      isRecording, setIsRecording,
+      isPaused, setIsPaused,
+      path: trackingPath, setPath: setTrackingPath,
+      distance: trackingDistance, setDistance: setTrackingDistance,
+      time: trackingTime, setTime: setTrackingTime,
+      currentPos: currentGPSPos,
+      resetTracking
+    }
   };
 
   const renderView = () => {
@@ -413,8 +538,35 @@ export default function App() {
       )}
 
 
+      {/* Mini Background Activity Banner */}
+      {isRecording && currentView !== 'Live' && (
+        <div
+          onClick={() => handleNavigate('Live')}
+          className="fixed top-0 inset-x-0 z-[200000] bg-red-500 text-white px-4 py-3 flex items-center justify-between shadow-lg cursor-pointer animate-fade-in animate-slide-up"
+        >
+          <div className="flex items-center gap-3">
+            <div className="size-2 bg-white rounded-full animate-ping"></div>
+            <p className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+              {isPaused ? (language === 'en' ? 'PAUSED' : 'RUTA EN PAUSA') : (language === 'en' ? 'RECORDING ROUTE...' : 'GRABANDO RUTA...')}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] font-bold opacity-70 leading-none uppercase">{language === 'en' ? 'Dist' : 'DIST'}</span>
+              <span className="text-sm font-black tabular-nums">{trackingDistance.toFixed(2)} km</span>
+            </div>
+            <div className="flex flex-col items-end border-l border-white/20 pl-4">
+              <span className="text-[10px] font-bold opacity-70 leading-none uppercase">{language === 'en' ? 'Time' : 'TIEMPO'}</span>
+              <span className="text-sm font-black tabular-nums">
+                {Math.floor(trackingTime / 3600)}:{Math.floor((trackingTime % 3600) / 60).toString().padStart(2, '0')}:{(trackingTime % 60).toString().padStart(2, '0')}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page Transition Wrapper */}
-      <div key={animationKey} className="page-enter flex-1 flex flex-col pb-24 lg:pb-0">
+      <div key={animationKey} className={`page-enter flex-1 flex flex-col ${isRecording && currentView !== 'Live' ? 'pt-14' : ''} pb-24 lg:pb-0`}>
         {renderView()}
       </div>
 
@@ -436,10 +588,12 @@ export default function App() {
               onClick={() => handleNavigate('Live')}
               className="flex flex-col items-center gap-0.5 group -mt-7 transition-all active:scale-90"
             >
-              <div className="size-12 rounded-full bg-red-500 flex items-center justify-center text-white shadow-xl shadow-red-500/30 border-4 border-white/20 dark:border-slate-900/50 group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined !text-[24px] animate-pulse">sensors</span>
+              <div className={`size-12 rounded-full ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-red-500'} flex items-center justify-center text-white shadow-xl shadow-red-500/30 border-4 border-white/20 dark:border-slate-900/50 group-hover:scale-110 transition-transform`}>
+                <span className="material-symbols-outlined !text-[24px]">{isRecording ? 'timer' : 'sensors'}</span>
               </div>
-              <span className="text-[9px] font-black uppercase tracking-tight text-red-500">Ruta</span>
+              <span className={`text-[9px] font-black uppercase tracking-tight ${isRecording ? 'text-red-600' : 'text-red-500'}`}>
+                {isRecording ? (isPaused ? 'PAUSA' : 'RUTA') : 'Ruta'}
+              </span>
             </button>
 
             <button
